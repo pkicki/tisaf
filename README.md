@@ -1,7 +1,6 @@
-# Deep Multispectral Networks
+# Neural Planning
 
-This repository contains work on processing multispectral data using deep neural networks
-in application to classification of terrains.
+This repository contains work on the path planning with the use of neural networks.
 
 ## Dependencies
 
@@ -11,6 +10,6 @@ in application to classification of terrains.
 ## How to run
 
 ```bash
-python experiments/ex1.py --TODO
+python experiments/planner.py --TODO
 ```
 
