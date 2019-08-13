@@ -47,13 +47,27 @@ def planning_dataset(path, num_of_samples):
     _, target, free_space, distance_map = _load_scenario(path)
 
     # skos
-    x0_range = tf.random_uniform([num_of_samples, 1], 48., 52.)
-    #x0_range = tf.random_uniform([num_of_samples, 1], 50., 50.)
-    y0_range = tf.random_uniform([num_of_samples, 1], 19., 23.)
-    #y0_range = tf.random_uniform([num_of_samples, 1], 20., 20.)
-    th0_range = tf.random_uniform([num_of_samples, 1], -0.15, 0.15) + pi/2
-    #th0_range = tf.random_uniform([num_of_samples, 1], -0.2, 0.2) + pi/2
-    #th0_range = tf.random_uniform([num_of_samples, 1], 0.0, 0.0) + pi/2
+    #x0_range = tf.random_uniform([num_of_samples, 1], 48., 52.)
+    ##x0_range = tf.random_uniform([num_of_samples, 1], 50., 50.)
+    #y0_range = tf.random_uniform([num_of_samples, 1], 19., 23.)
+    ##y0_range = tf.random_uniform([num_of_samples, 1], 20., 20.)
+    #th0_range = tf.random_uniform([num_of_samples, 1], -0.15, 0.15) + pi/2
+    ##th0_range = tf.random_uniform([num_of_samples, 1], -0.20, 0.20) + pi/2
+    ##th0_range = tf.random_uniform([num_of_samples, 1], 0.0, 0.0) + pi/2
+
+    # korytarz
+    #x0_range = tf.random_uniform([num_of_samples, 1], 48.73, 48.77)
+    x0_range = tf.random_uniform([num_of_samples, 1], 48.75, 48.75)
+    #y0_range = tf.random_uniform([num_of_samples, 1], 11.18, 11.22)
+    y0_range = tf.random_uniform([num_of_samples, 1], 11.2, 11.2)
+    #th0_range = tf.random_uniform([num_of_samples, 1], -0.01, -0.11) + pi/2
+    th0_range = tf.random_uniform([num_of_samples, 1], -0.05, -0.05) + pi/2
+
+    # prost
+    #x0_range = tf.random_uniform([num_of_samples, 1], 49., 51.)
+    #y0_range = tf.random_uniform([num_of_samples, 1], 22., 24.)
+    #th0_range = tf.random_uniform([num_of_samples, 1], 0.1, 0.1) + pi/2
+
     xk = tf.ones_like(x0_range) * target.x
     yk = tf.ones_like(x0_range) * target.y
     thk = tf.ones_like(x0_range) * target.fi
