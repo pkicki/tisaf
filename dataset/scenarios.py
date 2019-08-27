@@ -57,11 +57,11 @@ def planning_dataset(path, num_of_samples):
 
     # korytarz
     #x0_range = tf.random_uniform([num_of_samples, 1], 48.73, 48.77)
-    x0_range = tf.random_uniform([num_of_samples, 1], 48.75, 48.75)
+    x0_range = tf.random_uniform([num_of_samples, 1], 48.7, 48.8)
     #y0_range = tf.random_uniform([num_of_samples, 1], 11.18, 11.22)
-    y0_range = tf.random_uniform([num_of_samples, 1], 11.2, 11.2)
+    y0_range = tf.random_uniform([num_of_samples, 1], 11.1, 11.3)
     #th0_range = tf.random_uniform([num_of_samples, 1], -0.01, -0.11) + pi/2
-    th0_range = tf.random_uniform([num_of_samples, 1], -0.05, -0.05) + pi/2
+    th0_range = tf.random_uniform([num_of_samples, 1], -0.02, -0.02) + pi/2 - 0.08
 
     # prost
     #x0_range = tf.random_uniform([num_of_samples, 1], 49., 51.)

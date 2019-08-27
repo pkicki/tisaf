@@ -55,7 +55,7 @@ def main(args):
 
     # 2. Define model
     # model = PlanningNetworkMP(2, (args.batch_size, 6))
-    model = PlanningNetwork(2, (args.batch_size, 6))
+    model = PlanningNetwork(3, (args.batch_size, 6))
     #model = Poly(2, (args.batch_size, 6))
 
     # 3. Optimization
@@ -86,7 +86,7 @@ def main(args):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape() as tape:
                 output = model(task, training=True)
-                model_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+                model_loss, invalid_loss, x_path, y_path, th_path = plan_loss(output, task, env)
                 reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
@@ -99,8 +99,8 @@ def main(args):
                                       global_step=tf.train.get_or_create_global_step())
 
             # 5.1.3 Calculate statistics
-            s = tf.reduce_mean(tf.cast(tf.equal(model_loss, 0.0), tf.float32))
-            acc.append(tf.cast(tf.equal(model_loss, 0.0), tf.float32))
+            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             # prediction = tf.argmax(output, -1, output_type=tf.int32)
             # accuracy(prediction, labels)
             # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
@@ -108,6 +108,7 @@ def main(args):
             # 5.1.4 Save logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
+                tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
@@ -115,10 +116,10 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 130 == 0:
+            if train_step % 100 == 0:
                 _plot(x_path, y_path, th_path, env)
-            print(total_loss)
-            # _plot(x_path, y_path, th_path, env)
+            #print(total_loss)
+            #_plot(x_path, y_path, th_path, env)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
@@ -134,10 +135,10 @@ def main(args):
         for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
             output = model(task, training=False)
-            model_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+            model_loss, invalid_loss, x_path, y_path, th_path = plan_loss(output, task, env)
 
-            s = tf.reduce_mean(tf.cast(tf.equal(model_loss, 0.0), tf.float32))
-            acc.append(tf.cast(tf.equal(model_loss, 0.0), tf.float32))
+            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
 
             # 5.1.2 Calculate statistics
             # prediction = tf.argmax(output, -1, output_type=tf.int32)
@@ -147,7 +148,8 @@ def main(args):
             # 5.2.3 Print logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
-                tfc.summary.scalar('metrics/good_paths', s, step=val_step * 10)
+                tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
+                tfc.summary.scalar('metrics/good_paths', s, step=val_step)
 
             # 5.2.4 Update meta variables
             val_step += 1

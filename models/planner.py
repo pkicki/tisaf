@@ -244,8 +244,9 @@ def plan_loss(plan, task, env):
     y_path.append(y_glob)
     th_path.append(th_glob)
 
+    #loss = 1e-1 * curvature_loss + obstacles_loss
     loss = curvature_loss + obstacles_loss
-    return loss, x_path, y_path, th_path
+    return loss, obstacles_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env):
@@ -280,7 +281,8 @@ def process_segment(plan, xL, yL, thL, last_ddy, env):
 
     # calculate violations
     curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
-    # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
+    #curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
+    #curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, env)
 
     return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:,
