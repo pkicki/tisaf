@@ -54,8 +54,8 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    # model = PlanningNetworkMP(2, (args.batch_size, 6))
-    model = PlanningNetwork(3, (args.batch_size, 6))
+    model = PlanningNetworkMP(6, (args.batch_size, 6))
+    #model = PlanningNetwork(6, (args.batch_size, 6))
     #model = Poly(2, (args.batch_size, 6))
 
     # 3. Optimization
@@ -92,9 +92,12 @@ def main(args):
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
-            # print(grads)
-            # grads = [tf.clip_by_value(g, -1., 1.) for g in grads]
-            grads = [tf.clip_by_norm(g, 1.) for g in grads]
+            #grads = [tf.clip_by_value(g, -1., 1.) for g in grads]
+            #grads = [tf.clip_by_norm(g, 1.) for g in grads]
+            #print("AFTER:", grads[0])
+            #for k, n in enumerate(model.trainable_variables):
+            #    print(i, n.name)
+            #    print(grads[k])
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
@@ -116,7 +119,7 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 100 == 0:
+            if train_step % 30 == 0:
                 _plot(x_path, y_path, th_path, env)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
