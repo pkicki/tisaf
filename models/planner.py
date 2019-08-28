@@ -91,7 +91,7 @@ class PlanningNetworkMP(tf.keras.Model):
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
         self.x_est = EstimatorLayer(tf.exp, bias=2.0)
         self.y_est = EstimatorLayer(mul=10.)
-        self.dy_est = EstimatorLayer(mul=2.)
+        self.dy_est = EstimatorLayer(mul=1., bias=-0.1)
         self.ddy_est = EstimatorLayer(mul=2.)
 
     def call(self, task, training=None):
@@ -302,6 +302,7 @@ def invalidate(x, y, fi, env):
     penetration = dist(env.free_space, crucial_points)
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
+    #in_obstacle = tf.reduce_sum(penetration[:, :-1], -1)
     violation_level = tf.reduce_sum(in_obstacle, -1)
     return violation_level
 

@@ -43,7 +43,7 @@ def main(args):
     # 1. Get datasets
     train_ds, train_size, free_space = scenarios.planning_dataset(args.scenario_path, int(128 * 1))
     val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path, int(128 * 0.1))
-    env = Environment(free_space, 1. / 6)
+    env = Environment(free_space, 1. / 4.)
 
     train_ds = train_ds \
         .batch(args.batch_size) \
@@ -119,7 +119,7 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 30 == 0:
+            if train_step % 300 == 0:
                 _plot(x_path, y_path, th_path, env)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
