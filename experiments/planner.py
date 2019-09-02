@@ -22,9 +22,9 @@ import tensorflow.contrib as tfc
 from tqdm import tqdm
 
 from dl_work.utils import ExperimentHandler, LoadFromFile
-from models import PlanningNetwork
 
 tf.enable_eager_execution()
+tf.set_random_seed(444)
 
 _tqdm = lambda t, s, i: tqdm(
     ncols=80,
@@ -86,7 +86,7 @@ def main(args):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape() as tape:
                 output = model(task, training=True)
-                model_loss, invalid_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+                model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, task, env)
                 reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
@@ -112,6 +112,7 @@ def main(args):
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
+                tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
                 tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
@@ -119,7 +120,7 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 300 == 0:
+            if train_step % 40 == 0:
                 _plot(x_path, y_path, th_path, env)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
@@ -138,7 +139,7 @@ def main(args):
         for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
             output = model(task, training=False)
-            model_loss, invalid_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+            model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, task, env)
 
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
@@ -152,6 +153,7 @@ def main(args):
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
+                tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=val_step)
 
             # 5.2.4 Update meta variables

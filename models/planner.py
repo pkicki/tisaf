@@ -89,9 +89,9 @@ class PlanningNetworkMP(tf.keras.Model):
         self.num_segments = num_segments - 1
 
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
-        self.x_est = EstimatorLayer(tf.exp, bias=2.0)
+        self.x_est = EstimatorLayer(tf.exp, bias=0.01)
         self.y_est = EstimatorLayer(mul=10.)
-        self.dy_est = EstimatorLayer(mul=1., bias=-0.1)
+        self.dy_est = EstimatorLayer(mul=1., bias=0.0)
         self.ddy_est = EstimatorLayer(mul=2.)
 
     def call(self, task, training=None):
@@ -237,6 +237,7 @@ def plan_loss(plan, task, env):
     R = Rot(-thL)
     xyk_L = tf.squeeze(R @ (xyk - xyL[:, :, tf.newaxis]), -1)
     thk_L = -(thL[:, tf.newaxis] - thk)
+    overshoot_loss = tf.square(tf.nn.relu(-xyk_L[:, 0]))
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
         process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
     curvature_loss += curvature_violation
@@ -247,8 +248,8 @@ def plan_loss(plan, task, env):
     th_path.append(th_glob)
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
-    loss = curvature_loss + obstacles_loss
-    return loss, obstacles_loss, x_path, y_path, th_path
+    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    return loss, obstacles_loss, overshoot_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env):
