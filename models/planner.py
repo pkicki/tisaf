@@ -91,7 +91,7 @@ class PlanningNetworkMP(tf.keras.Model):
 
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
         self.x_est = EstimatorLayer(tf.exp, bias=0.1)
-        self.y_est = EstimatorLayer(mul=10.)
+        self.y_est = EstimatorLayer(mul=5.)
         self.dy_est = EstimatorLayer(mul=1., bias=0.0)
         self.ddy_est = EstimatorLayer(mul=2.)
 
@@ -101,8 +101,8 @@ class PlanningNetworkMP(tf.keras.Model):
 
         parameters = []
         for i in range(self.num_segments):
-            ex = (xk - x0) / 100.
-            ey = (yk - y0) / 100.
+            ex = (xk - x0) / 15.
+            ey = (yk - y0) / 15.
             eth = (thk - th0) / (2 * pi)
             inputs = tf.concat([ex, ey, eth, last_ddy], -1)
 
@@ -183,15 +183,15 @@ class Poly(tf.keras.Model):
 
     def __init__(self, num_segments, input_shape):
         super(Poly, self).__init__()
-        self.x = tf.Variable(10.0, trainable=True)
-        self.y = tf.Variable(-8.0, trainable=True)
-        self.dy = tf.Variable(-0.5, trainable=True)
-        self.ddy = tf.Variable(0.0, trainable=True)
+        self.x = tf.Variable(10.0, trainable=True, name="x1")
+        self.y = tf.Variable(-8.0, trainable=True, name="y1")
+        self.dy = tf.Variable(-0.5, trainable=True, name="dy1")
+        self.ddy = tf.Variable(0.0, trainable=True, name="ddy1")
 
-        self.x1 = tf.Variable(10.0, trainable=True)
-        self.y1 = tf.Variable(-8.0, trainable=True)
-        self.dy1 = tf.Variable(-0.5, trainable=True)
-        self.ddy1 = tf.Variable(0.0, trainable=True)
+        self.x1 = tf.Variable(10.0, trainable=True, name="x2")
+        self.y1 = tf.Variable(-8.0, trainable=True, name="y2")
+        self.dy1 = tf.Variable(-0.5, trainable=True, name="dy2")
+        self.ddy1 = tf.Variable(0.0, trainable=True, name="ddy2")
 
     def call(self, task, training=None):
         n = 2
@@ -238,8 +238,11 @@ def plan_loss(plan, data, env):
     xyk = tf.stack([xk, yk], 1)
     R = Rot(-thL)
     xyk_L = tf.squeeze(R @ (xyk - xyL[:, :, tf.newaxis]), -1)
-    thk_L = -(thL[:, tf.newaxis] - thk)
-    overshoot_loss = tf.square(tf.nn.relu(-xyk_L[:, 0]))
+    xyL_k = tf.squeeze(Rot(-thk[:, 0]) @ (xyL[:, :, tf.newaxis] - xyk), -1)
+    thk_L = (thk - thL[:, tf.newaxis])
+    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
+    #overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
+    #overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
         process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
     curvature_loss += curvature_violation
@@ -251,7 +254,8 @@ def plan_loss(plan, data, env):
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
     loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    return loss, obstacles_loss, overshoot_loss, x_path, y_path, th_path
+    #loss = overshoot_loss * 1e2
+    return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env):

@@ -43,18 +43,18 @@ def main(args):
     # 1. Get datasets
     train_ds, train_size, free_space = scenarios.planning_dataset(args.scenario_path)
     val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path)
-    env = Environment(free_space, 1. / 4.)
+    env = Environment(free_space, 1. / 2.65 * np.sqrt(3))
 
-    train_ds = train_ds \
-        .batch(args.batch_size) \
-        .prefetch(args.batch_size)
+    #train_ds = train_ds \
+    #    .batch(args.batch_size) \
+    #    .prefetch(args.batch_size)
 
     val_ds = val_ds \
         .batch(args.batch_size) \
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(7, (args.batch_size, 6))
+    model = PlanningNetworkMP(5, (args.batch_size, 6))
     #model = PlanningNetwork(6, (args.batch_size, 6))
     #model = Poly(2, (args.batch_size, 6))
 
@@ -77,16 +77,20 @@ def main(args):
     train_step, val_step = 0, 0
     best_accuracy = 0.0
     for epoch in range(args.num_epochs):
+        # workaround for tf problems with shuffling
+        dataset_epoch = train_ds.shuffle(train_size)
+        dataset_epoch = dataset_epoch.batch(args.batch_size).prefetch(args.batch_size)
+        #dataset_epoch = train_ds
 
         # 5.1. Training Loop
         accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
         experiment_handler.log_training()
         acc = []
-        for i, data in _ds('Train', train_ds, train_size, epoch, args.batch_size):
+        for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape() as tape:
                 output = model(data, training=True)
-                model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, data, env)
+                model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data, env)
                 reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
@@ -97,7 +101,8 @@ def main(args):
             #print("AFTER:", grads[0])
             #for k, n in enumerate(model.trainable_variables):
             #    print(i, n.name)
-            #    print(grads[k])
+            #    print(n)
+            #    #print(grads[k])
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
@@ -113,6 +118,7 @@ def main(args):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
+                tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
                 tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
@@ -120,7 +126,7 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 140 == 0:
+            if train_step % 240 == 0:
                 _plot(x_path, y_path, th_path, env)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
@@ -139,7 +145,7 @@ def main(args):
         for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
             output = model(task, training=False)
-            model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+            model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, task, env)
 
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
@@ -154,6 +160,7 @@ def main(args):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
+                tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=val_step)
 
             # 5.2.4 Update meta variables
