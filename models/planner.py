@@ -2,6 +2,7 @@ from math import pi
 
 import tensorflow as tf
 
+from dataset.scenarios import decode_data
 from utils.crucial_points import calculate_car_crucial_points
 from utils.distances import dist
 from utils.poly5 import curvature, params
@@ -94,8 +95,8 @@ class PlanningNetworkMP(tf.keras.Model):
         self.dy_est = EstimatorLayer(mul=1., bias=0.0)
         self.ddy_est = EstimatorLayer(mul=2.)
 
-    def call(self, task, training=None):
-        x0, y0, th0, xk, yk, thk = task.get_definition()
+    def call(self, data, training=None):
+        x0, y0, th0, xk, yk, thk = decode_data(data)
         last_ddy = tf.zeros_like(x0)
 
         parameters = []
@@ -154,8 +155,8 @@ class PlanningNetwork(tf.keras.Model):
                                   EstimatorLayer(),
                                   CorrectionLayer(n)) for _ in range(num_segments)]
 
-    def call(self, task, training=None):
-        x0, y0, th0, xk, yk, thk = task.get_definition()
+    def call(self, data, training=None):
+        x0, y0, th0, xk, yk, thk = decode_data(data)
         ex = (xk - x0) / 100.
         ey = (yk - y0) / 100.
         eth = (thk - th0) / (2 * pi)
@@ -201,9 +202,9 @@ class Poly(tf.keras.Model):
         return p
 
 
-def plan_loss(plan, task, env):
+def plan_loss(plan, data, env):
     num_gpts = plan.shape[-1]
-    x0, y0, th0, xk, yk, thk = task.get_definition()
+    x0, y0, th0, xk, yk, thk = decode_data(data)
     xL = x0[:, 0]
     yL = y0[:, 0]
     thL = th0[:, 0]

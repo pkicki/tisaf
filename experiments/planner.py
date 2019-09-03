@@ -35,14 +35,14 @@ _tqdm = lambda t, s, i: tqdm(
 def _ds(title, ds, ds_size, i, batch_size):
     with _tqdm(title, ds_size, i) as pbar:
         for i, data in enumerate(ds):
-            yield (i,) + (Task(*data),)
+            yield (i, data)
             pbar.update(batch_size)
 
 
 def main(args):
     # 1. Get datasets
-    train_ds, train_size, free_space = scenarios.planning_dataset(args.scenario_path, int(128 * 1))
-    val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path, int(128 * 0.1))
+    train_ds, train_size, free_space = scenarios.planning_dataset(args.scenario_path)
+    val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path)
     env = Environment(free_space, 1. / 4.)
 
     train_ds = train_ds \
@@ -54,7 +54,7 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(6, (args.batch_size, 6))
+    model = PlanningNetworkMP(7, (args.batch_size, 6))
     #model = PlanningNetwork(6, (args.batch_size, 6))
     #model = Poly(2, (args.batch_size, 6))
 
@@ -82,11 +82,11 @@ def main(args):
         accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
         experiment_handler.log_training()
         acc = []
-        for i, task in _ds('Train', train_ds, train_size, epoch, args.batch_size):
+        for i, data in _ds('Train', train_ds, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape() as tape:
-                output = model(task, training=True)
-                model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+                output = model(data, training=True)
+                model_loss, invalid_loss, overshoot_loss, x_path, y_path, th_path = plan_loss(output, data, env)
                 reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
@@ -120,7 +120,7 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 40 == 0:
+            if train_step % 140 == 0:
                 _plot(x_path, y_path, th_path, env)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
