@@ -193,10 +193,11 @@ class Poly(tf.keras.Model):
         self.ddy1 = tf.Variable(0.0, trainable=True)
 
     def call(self, task, training=None):
+        n = 2
         p = tf.stack([self.x, self.y, self.dy, self.ddy], -1)[tf.newaxis, :, tf.newaxis]
-        p = tf.tile(p, [2, 1, 1])
+        p = tf.tile(p, [n, 1, 1])
         p1 = tf.stack([self.x1, self.y1, self.dy1, self.ddy1], -1)[tf.newaxis, :, tf.newaxis]
-        p1 = tf.tile(p1, [2, 1, 1])
+        p1 = tf.tile(p1, [n, 1, 1])
         p = tf.concat([p, p1], -1)
         return p
 
