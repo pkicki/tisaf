@@ -147,32 +147,37 @@ class PlanningNetwork(tf.keras.Model):
 
         n = 256
         # n = 128
+        self.num_segments = num_segments
 
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
-        self.processing_stage = [(EstimatorLayer(tf.exp, bias=8),
-                                  EstimatorLayer(),
-                                  EstimatorLayer(bias=-0.1),
-                                  EstimatorLayer(),
-                                  CorrectionLayer(n)) for _ in range(num_segments)]
+        self.x_est = [EstimatorLayer(tf.nn.relu, bias=0.1) for _ in range(num_segments)]
+        self.y_est = [EstimatorLayer(mul=5.) for _ in range(num_segments)]
+        self.dy_est = [EstimatorLayer(mul=1.) for _ in range(num_segments)]
+        self.ddy_est = [EstimatorLayer(mul=2.) for _ in range(num_segments)]
+        self.corr = [CorrectionLayer(n) for _ in range(num_segments)]
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
-        ex = (xk - x0) / 100.
-        ey = (yk - y0) / 100.
+        ex = (xk - x0) / 15.
+        ey = (yk - y0) / 15.
         eth = (thk - th0) / (2 * pi)
         inputs = tf.concat([ex, ey, eth], -1)
 
         features = self.preprocessing_stage(inputs, training)
 
         parameters = []
-        for x_est, y_est, dy_est, ddy_est, corr_est in self.processing_stage:
-            x = x_est(features, training)
-            y = y_est(features, training)
-            dy = dy_est(features, training)
-            ddy = ddy_est(features, training)
-            features += corr_est(features, training)
+        i = 0
+        #for x_est, y_est, dy_est, ddy_est, corr_est in self.processing_stage:
+        for i in range(self.num_segments):
+            #x = x_est(features, training)
+            x = self.x_est[i](features, training)
+            y = self.y_est[i](features, training)
+            dy = self.dy_est[i](features, training)
+            ddy = self.ddy_est[i](features, training)
+            features += self.corr[i](features, training)
             p = tf.concat([x, y, dy, ddy], -1)
             parameters.append(p)
+            i += 1
 
         parameters = tf.stack(parameters, -1)
 
@@ -258,7 +263,7 @@ def plan_loss(plan, data, env):
     return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
 
 
-def _plot(x_path, y_path, th_path, env):
+def _plot(x_path, y_path, th_path, env, step):
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
@@ -271,7 +276,8 @@ def _plot(x_path, y_path, th_path, env):
         for j in range(4):
             fs = env.free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    plt.show()
+    plt.savefig("last_path" + str(step).zfill(6) + ".png")
+    plt.clf()
 
 
 def process_segment(plan, xL, yL, thL, last_ddy, env):

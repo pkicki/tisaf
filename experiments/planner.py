@@ -11,7 +11,7 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly
+from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
 from utils.utils import Environment
 from dataset.scenarios import Task
 
@@ -54,8 +54,8 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(5, (args.batch_size, 6))
-    #model = PlanningNetwork(6, (args.batch_size, 6))
+    #model = PlanningNetworkMP(5, (args.batch_size, 6))
+    model = PlanningNetwork(3, (args.batch_size, 6))
     #model = Poly(2, (args.batch_size, 6))
 
     # 3. Optimization
@@ -126,8 +126,8 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 240 == 0:
-                _plot(x_path, y_path, th_path, env)
+            if train_step % 20 == 0:
+                _plot(x_path, y_path, th_path, env, train_step)
             #print(total_loss)
             #_plot(x_path, y_path, th_path, env)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
