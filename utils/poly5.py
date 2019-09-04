@@ -4,6 +4,7 @@ import tensorflow as tf
 def params(q0, q1):
     x0, y0, dy0, ddy0 = q0
     x1, y1, dy1, ddy1 = q1
+    #print(x1)
 
     ones = tf.ones_like(x0, dtype=tf.float32)
     zeros = tf.zeros_like(x0, dtype=tf.float32)

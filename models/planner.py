@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from dataset.scenarios import decode_data
 from utils.crucial_points import calculate_car_crucial_points
-from utils.distances import dist
+from utils.distances import dist, integral
 from utils.poly5 import curvature, params
 from utils.utils import _calculate_length, Rot
 from matplotlib import pyplot as plt
@@ -89,9 +89,11 @@ class PlanningNetworkMP(tf.keras.Model):
         # n = 128
         self.num_segments = num_segments - 1
 
-        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
-        self.x_est = EstimatorLayer(tf.exp, bias=0.1)
-        self.y_est = EstimatorLayer(mul=5.)
+        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.01)
+        #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
+        #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
+        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1)
+        self.y_est = EstimatorLayer(mul=10.)
         self.dy_est = EstimatorLayer(mul=1., bias=0.0)
         self.ddy_est = EstimatorLayer(mul=2.)
 
@@ -167,9 +169,9 @@ class PlanningNetwork(tf.keras.Model):
 
         parameters = []
         i = 0
-        #for x_est, y_est, dy_est, ddy_est, corr_est in self.processing_stage:
+        # for x_est, y_est, dy_est, ddy_est, corr_est in self.processing_stage:
         for i in range(self.num_segments):
-            #x = x_est(features, training)
+            # x = x_est(features, training)
             x = self.x_est[i](features, training)
             y = self.y_est[i](features, training)
             dy = self.dy_est[i](features, training)
@@ -188,23 +190,37 @@ class Poly(tf.keras.Model):
 
     def __init__(self, num_segments, input_shape):
         super(Poly, self).__init__()
-        self.x = tf.Variable(10.0, trainable=True, name="x1")
-        self.y = tf.Variable(-8.0, trainable=True, name="y1")
-        self.dy = tf.Variable(-0.5, trainable=True, name="dy1")
+        self.x = tf.Variable(2.0, trainable=True, name="x1")
+        self.y = tf.Variable(-3.0, trainable=True, name="y1")
+        self.dy = tf.Variable(0.0, trainable=True, name="dy1")
         self.ddy = tf.Variable(0.0, trainable=True, name="ddy1")
 
-        self.x1 = tf.Variable(10.0, trainable=True, name="x2")
-        self.y1 = tf.Variable(-8.0, trainable=True, name="y2")
-        self.dy1 = tf.Variable(-0.5, trainable=True, name="dy2")
+        self.x1 = tf.Variable(1.0, trainable=True, name="x2")
+        self.y1 = tf.Variable(0.0, trainable=True, name="y2")
+        self.dy1 = tf.Variable(-0.1, trainable=True, name="dy2")
         self.ddy1 = tf.Variable(0.0, trainable=True, name="ddy2")
 
+        self.x2 = tf.Variable(1.0, trainable=True, name="x3")
+        self.y2 = tf.Variable(0.0, trainable=True, name="y3")
+        self.dy2 = tf.Variable(-0.1, trainable=True, name="dy3")
+        self.ddy2 = tf.Variable(0.0, trainable=True, name="ddy3")
+
+        self.x3 = tf.Variable(1.0, trainable=True, name="x4")
+        self.y3 = tf.Variable(0.0, trainable=True, name="y4")
+        self.dy3 = tf.Variable(-0.1, trainable=True, name="dy4")
+        self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
+
     def call(self, task, training=None):
-        n = 2
+        n = 1
         p = tf.stack([self.x, self.y, self.dy, self.ddy], -1)[tf.newaxis, :, tf.newaxis]
         p = tf.tile(p, [n, 1, 1])
         p1 = tf.stack([self.x1, self.y1, self.dy1, self.ddy1], -1)[tf.newaxis, :, tf.newaxis]
         p1 = tf.tile(p1, [n, 1, 1])
-        p = tf.concat([p, p1], -1)
+        p2 = tf.stack([self.x2, self.y2, self.dy2, self.ddy2], -1)[tf.newaxis, :, tf.newaxis]
+        p2 = tf.tile(p2, [n, 1, 1])
+        p3 = tf.stack([self.x3, self.y3, self.dy3, self.ddy3], -1)[tf.newaxis, :, tf.newaxis]
+        p3 = tf.tile(p3, [n, 1, 1])
+        p = tf.concat([p, p1, p2, p3], -1)
         return p
 
 
@@ -246,8 +262,8 @@ def plan_loss(plan, data, env):
     xyL_k = tf.squeeze(Rot(-thk[:, 0]) @ (xyL[:, :, tf.newaxis] - xyk), -1)
     thk_L = (thk - thL[:, tf.newaxis])
     overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
-    #overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
-    #overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
+    # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
+    # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
         process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
     curvature_loss += curvature_violation
@@ -259,7 +275,8 @@ def plan_loss(plan, data, env):
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
     loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    #loss = overshoot_loss * 1e2
+    # loss = obstacles_loss #+ overshoot_loss * 1e2
+    # loss = overshoot_loss * 1e2
     return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
 
 
@@ -276,8 +293,13 @@ def _plot(x_path, y_path, th_path, env, step):
         for j in range(4):
             fs = env.free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
+    #plt.xlim(0.0, 15.0)
+    #plt.ylim(0.0, 15.0)
+    plt.xlim(-15.0, 20.0)
+    plt.ylim(0.0, 35.0)
     plt.savefig("last_path" + str(step).zfill(6) + ".png")
     plt.clf()
+    # plt.show()
 
 
 def process_segment(plan, xL, yL, thL, last_ddy, env):
@@ -311,11 +333,14 @@ def invalidate(x, y, fi, env):
     """
     crucial_points = calculate_car_crucial_points(x, y, fi)
     crucial_points = tf.stack(crucial_points, -2)
+
     d = tf.sqrt(tf.reduce_sum((crucial_points[:, 1:] - crucial_points[:, :-1]) ** 2, -1))
     penetration = dist(env.free_space, crucial_points)
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
     violation_level = tf.reduce_sum(in_obstacle, -1)
+
+    # violation_level = integral(env.free_space, crucial_points)
     return violation_level
 
 

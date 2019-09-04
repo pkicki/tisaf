@@ -43,7 +43,7 @@ def planning_dataset(path):
     free_space = get_map(map_path)
 
     ds = tf.data.Dataset.from_tensor_slices(scenarios) \
-        .shuffle(len(scenarios))
+        .shuffle(buffer_size=len(scenarios), reshuffle_each_iteration=True)
 
     return ds, len(scenarios), free_space
 
