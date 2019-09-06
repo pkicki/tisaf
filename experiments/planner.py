@@ -54,7 +54,7 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(5, (args.batch_size, 6))
+    model = PlanningNetworkMP(7, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
     #model = Poly(3, (args.batch_size, 6))
 
@@ -91,7 +91,7 @@ def main(args):
             with tf.GradientTape() as tape:
                 output = model(data, training=True)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data, env)
-                reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
+                #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
@@ -102,9 +102,10 @@ def main(args):
             #print("LOSS", total_loss)
             #print("GRADS")
             #for k, n in enumerate(model.trainable_variables):
-            #    print(i, n.name)
-            ##    print(n)
-            #    print(grads[k])
+            #    if "dense_4" in n.name:
+            #        print(i, n.name)
+            #        print(n)
+            #    #print(grads[k])
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
@@ -121,7 +122,7 @@ def main(args):
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
                 tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
-                tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
+                #tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
 

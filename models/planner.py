@@ -17,21 +17,26 @@ class EstimatorLayer(tf.keras.Model):
     Parameter estimator layer
     """
 
-    def __init__(self, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias=0.0, mul=1.):
+    def __init__(self, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias=0.0, mul=1., pre_mul=1., pre_bias=0.0):
         super(EstimatorLayer, self).__init__()
-        self.bias = tf.Variable(bias, trainable=True)
+        self.bias = tf.Variable(bias, trainable=True, name="bias")
         self.mul = mul
+        self.pre_mul = pre_mul
+        self.pre_bias = pre_bias
+        self.activation = activation
         self.features = [
             # tf.keras.layers.Dense(64, activation,
             #                     kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
-            tf.keras.layers.Dense(1, activation,
-                                  kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
+            tf.keras.layers.Dense(1, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
         ]
 
     def call(self, inputs, training=None):
         x = inputs
         for layer in self.features:
             x = layer(x)
+            x *= self.pre_mul
+            x += self.pre_bias
+            x = self.activation(x)
         x *= self.mul
         x += self.bias
         return x
@@ -89,13 +94,13 @@ class PlanningNetworkMP(tf.keras.Model):
         # n = 128
         self.num_segments = num_segments - 1
 
-        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.01)
+        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
-        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1)
-        self.y_est = EstimatorLayer(mul=10.)
-        self.dy_est = EstimatorLayer(mul=1., bias=0.0)
-        self.ddy_est = EstimatorLayer(mul=2.)
+        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
+        self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
+        self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
+        self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
@@ -109,6 +114,7 @@ class PlanningNetworkMP(tf.keras.Model):
             inputs = tf.concat([ex, ey, eth, last_ddy], -1)
 
             features = self.preprocessing_stage(inputs, training)
+            #print(features)
 
             x = self.x_est(features, training)
             y = self.y_est(features, training)
