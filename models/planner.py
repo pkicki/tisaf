@@ -91,10 +91,10 @@ class PlanningNetworkMP(tf.keras.Model):
 
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.01)
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
-        #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
-        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1)
+        self.x_est = EstimatorLayer(tf.exp, kernel_init_std=0.1)
+        #self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=0.1, kernel_init_std=0.1)
         self.y_est = EstimatorLayer(mul=10.)
-        self.dy_est = EstimatorLayer(mul=1., bias=0.0)
+        self.dy_est = EstimatorLayer(mul=2., bias=0.0)
         self.ddy_est = EstimatorLayer(mul=2.)
 
     def call(self, data, training=None):

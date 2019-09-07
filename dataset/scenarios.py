@@ -33,9 +33,10 @@ def get_map(path):
 
 def planning_dataset(path):
     def parse_function(scn_path):
-        data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
-        p0 = tf.unstack(data[0], axis=0)
-        pk = tf.unstack(data[-1], axis=0)
+        #data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
+        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        p0 = tf.unstack(data[0][:3], axis=0)
+        pk = tf.unstack(data[-1][:3], axis=0)
         return p0, pk
 
     map_path = os.path.join(path, "map.map")
