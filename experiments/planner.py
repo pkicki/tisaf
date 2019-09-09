@@ -43,7 +43,8 @@ def main(args):
     # 1. Get datasets
     train_ds, train_size, free_space = scenarios.planning_dataset(args.scenario_path)
     val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path)
-    env = Environment(free_space, 1. / 2.57 * np.tan(np.pi * 50 / 180))
+    #env = Environment(free_space, 1. / 2.57 * np.tan(np.pi * 50 / 180))
+    env = Environment(free_space, 1. / 5.3)
 
     #train_ds = train_ds \
     #    .batch(args.batch_size) \
@@ -54,9 +55,9 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(7, (args.batch_size, 6))
+    #model = PlanningNetworkMP(5, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
-    #model = Poly(3, (args.batch_size, 6))
+    model = Poly(3, (args.batch_size, 6))
 
     # 3. Optimization
 

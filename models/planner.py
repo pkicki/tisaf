@@ -197,21 +197,21 @@ class Poly(tf.keras.Model):
     def __init__(self, num_segments, input_shape):
         super(Poly, self).__init__()
         self.x = tf.Variable(2.0, trainable=True, name="x1")
-        self.y = tf.Variable(-3.0, trainable=True, name="y1")
+        self.y = tf.Variable(0.0, trainable=True, name="y1")
         self.dy = tf.Variable(0.0, trainable=True, name="dy1")
         self.ddy = tf.Variable(0.0, trainable=True, name="ddy1")
 
-        self.x1 = tf.Variable(1.0, trainable=True, name="x2")
+        self.x1 = tf.Variable(2.0, trainable=True, name="x2")
         self.y1 = tf.Variable(0.0, trainable=True, name="y2")
         self.dy1 = tf.Variable(-0.1, trainable=True, name="dy2")
         self.ddy1 = tf.Variable(0.0, trainable=True, name="ddy2")
 
-        self.x2 = tf.Variable(1.0, trainable=True, name="x3")
+        self.x2 = tf.Variable(2.0, trainable=True, name="x3")
         self.y2 = tf.Variable(0.0, trainable=True, name="y3")
         self.dy2 = tf.Variable(-0.1, trainable=True, name="dy3")
         self.ddy2 = tf.Variable(0.0, trainable=True, name="ddy3")
 
-        self.x3 = tf.Variable(1.0, trainable=True, name="x4")
+        self.x3 = tf.Variable(2.0, trainable=True, name="x4")
         self.y3 = tf.Variable(0.0, trainable=True, name="y4")
         self.dy3 = tf.Variable(-0.1, trainable=True, name="dy4")
         self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
