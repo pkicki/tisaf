@@ -55,9 +55,9 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    #model = PlanningNetworkMP(5, (args.batch_size, 6))
+    model = PlanningNetworkMP(5, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
-    model = Poly(3, (args.batch_size, 6))
+    #model = Poly(3, (args.batch_size, 6))
 
     # 3. Optimization
 
@@ -103,10 +103,9 @@ def main(args):
             #print("LOSS", total_loss)
             #print("GRADS")
             #for k, n in enumerate(model.trainable_variables):
-            #    if "dense_4" in n.name:
-            #        print(i, n.name)
-            #        print(n)
-            #    #print(grads[k])
+            #    print(i, n.name)
+            ##    print(n)
+            #    print(grads[k])
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
