@@ -17,7 +17,8 @@ class EstimatorLayer(tf.keras.Model):
     Parameter estimator layer
     """
 
-    def __init__(self, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias=0.0, mul=1., pre_mul=1., pre_bias=0.0):
+    def __init__(self, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias=0.0, mul=1., pre_mul=1.,
+                 pre_bias=0.0):
         super(EstimatorLayer, self).__init__()
         self.bias = tf.Variable(bias, trainable=True, name="bias")
         self.mul = mul
@@ -68,70 +69,34 @@ class FeatureExtractorLayer(tf.keras.Model):
         return x
 
 
-class CorrectionLayer(tf.keras.Model):
-    """
-    Feature correction layer
-    """
-
-    def __init__(self, num_features, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias_init_val=0):
-        super(CorrectionLayer, self).__init__()
-        self.fc = tf.keras.layers.Dense(num_features, activation,
-                                        kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std),
-                                        bias_initializer=tf.keras.initializers.Constant(bias_init_val))
-
-    def call(self, inputs, training=None):
-        x = inputs
-        x = self.fc(x)
-        return x
-
-
 class PlanningNetworkMP(tf.keras.Model):
 
-    def __init__(self, num_segments, input_shape):
+    def __init__(self, input_shape):
         super(PlanningNetworkMP, self).__init__()
 
         n = 256
-        # n = 128
-        self.num_segments = num_segments - 1
 
-        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
-        #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
-        #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
+        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=1.0)
         self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
         self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
         self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
         self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
 
-    def call(self, data, training=None):
-        x0, y0, th0, xk, yk, thk = decode_data(data)
-        last_ddy = tf.zeros_like(x0)
+    def call(self, x, y, th, ddy, xk, yk, thk, training=None):
+        ex = (xk - x) / 15.
+        ey = (yk - y) / 15.
+        eth = (thk - th) / (2 * pi)
+        inputs = tf.stack([ex, ey, eth, ddy], -1)
 
-        parameters = []
-        for i in range(self.num_segments):
-            ex = (xk - x0) / 15.
-            ey = (yk - y0) / 15.
-            eth = (thk - th0) / (2 * pi)
-            inputs = tf.concat([ex, ey, eth, last_ddy], -1)
+        features = self.preprocessing_stage(inputs, training)
 
-            features = self.preprocessing_stage(inputs, training)
-            #print(features)
+        x = self.x_est(features, training)
+        y = self.y_est(features, training)
+        dy = self.dy_est(features, training)
+        ddy = self.ddy_est(features, training)
+        p = tf.concat([x, y, dy, ddy], -1)
 
-            x = self.x_est(features, training)
-            y = self.y_est(features, training)
-            dy = self.dy_est(features, training)
-            ddy = self.ddy_est(features, training)
-            p = tf.concat([x, y, dy, ddy], -1)
-            parameters.append(p)
-
-            x0, y0, th0 = calculate_next_point(p, x0[:, 0], y0[:, 0], th0[:, 0], last_ddy[:, 0])
-            x0 = x0[:, tf.newaxis]
-            y0 = y0[:, tf.newaxis]
-            th0 = th0[:, tf.newaxis]
-            last_ddy = ddy
-
-        parameters = tf.stack(parameters, -1)
-
-        return parameters
+        return p
 
 
 def calculate_next_point(plan, xL, yL, thL, last_ddy):
@@ -148,94 +113,11 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
     return x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
 
-class PlanningNetwork(tf.keras.Model):
-
-    def __init__(self, num_segments, input_shape):
-        super(PlanningNetwork, self).__init__()
-
-        n = 256
-        # n = 128
-        self.num_segments = num_segments
-
-        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
-        self.x_est = [EstimatorLayer(tf.nn.relu, bias=0.1) for _ in range(num_segments)]
-        self.y_est = [EstimatorLayer(mul=5.) for _ in range(num_segments)]
-        self.dy_est = [EstimatorLayer(mul=1.) for _ in range(num_segments)]
-        self.ddy_est = [EstimatorLayer(mul=2.) for _ in range(num_segments)]
-        self.corr = [CorrectionLayer(n) for _ in range(num_segments)]
-
-    def call(self, data, training=None):
-        x0, y0, th0, xk, yk, thk = decode_data(data)
-        ex = (xk - x0) / 15.
-        ey = (yk - y0) / 15.
-        eth = (thk - th0) / (2 * pi)
-        inputs = tf.concat([ex, ey, eth], -1)
-
-        features = self.preprocessing_stage(inputs, training)
-
-        parameters = []
-        i = 0
-        # for x_est, y_est, dy_est, ddy_est, corr_est in self.processing_stage:
-        for i in range(self.num_segments):
-            # x = x_est(features, training)
-            x = self.x_est[i](features, training)
-            y = self.y_est[i](features, training)
-            dy = self.dy_est[i](features, training)
-            ddy = self.ddy_est[i](features, training)
-            features += self.corr[i](features, training)
-            p = tf.concat([x, y, dy, ddy], -1)
-            parameters.append(p)
-            i += 1
-
-        parameters = tf.stack(parameters, -1)
-
-        return parameters
-
-
-class Poly(tf.keras.Model):
-
-    def __init__(self, num_segments, input_shape):
-        super(Poly, self).__init__()
-        self.x = tf.Variable(2.0, trainable=True, name="x1")
-        self.y = tf.Variable(0.0, trainable=True, name="y1")
-        self.dy = tf.Variable(0.0, trainable=True, name="dy1")
-        self.ddy = tf.Variable(0.0, trainable=True, name="ddy1")
-
-        self.x1 = tf.Variable(2.0, trainable=True, name="x2")
-        self.y1 = tf.Variable(0.0, trainable=True, name="y2")
-        self.dy1 = tf.Variable(-0.1, trainable=True, name="dy2")
-        self.ddy1 = tf.Variable(0.0, trainable=True, name="ddy2")
-
-        self.x2 = tf.Variable(2.0, trainable=True, name="x3")
-        self.y2 = tf.Variable(0.0, trainable=True, name="y3")
-        self.dy2 = tf.Variable(-0.1, trainable=True, name="dy3")
-        self.ddy2 = tf.Variable(0.0, trainable=True, name="ddy3")
-
-        self.x3 = tf.Variable(2.0, trainable=True, name="x4")
-        self.y3 = tf.Variable(0.0, trainable=True, name="y4")
-        self.dy3 = tf.Variable(-0.1, trainable=True, name="dy4")
-        self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
-
-    def call(self, task, training=None):
-        n = 1
-        p = tf.stack([self.x, self.y, self.dy, self.ddy], -1)[tf.newaxis, :, tf.newaxis]
-        p = tf.tile(p, [n, 1, 1])
-        p1 = tf.stack([self.x1, self.y1, self.dy1, self.ddy1], -1)[tf.newaxis, :, tf.newaxis]
-        p1 = tf.tile(p1, [n, 1, 1])
-        p2 = tf.stack([self.x2, self.y2, self.dy2, self.ddy2], -1)[tf.newaxis, :, tf.newaxis]
-        p2 = tf.tile(p2, [n, 1, 1])
-        p3 = tf.stack([self.x3, self.y3, self.dy3, self.ddy3], -1)[tf.newaxis, :, tf.newaxis]
-        p3 = tf.tile(p3, [n, 1, 1])
-        p = tf.concat([p, p1, p2, p3], -1)
-        return p
-
-
-def plan_loss(plan, data, env):
+def plan_loss(plan, env, x0, y0, th0, xk, yk, thk):
     num_gpts = plan.shape[-1]
-    x0, y0, th0, xk, yk, thk = decode_data(data)
-    xL = x0[:, 0]
-    yL = y0[:, 0]
-    thL = th0[:, 0]
+    xL = x0
+    yL = y0
+    thL = th0
     last_ddy = tf.zeros_like(xL)
     curvature_loss = 0.0
     obstacles_loss = 0.0
@@ -264,29 +146,28 @@ def plan_loss(plan, data, env):
     xyL = tf.stack([xL, yL], -1)
     xyk = tf.stack([xk, yk], 1)
     R = Rot(-thL)
-    xyk_L = tf.squeeze(R @ (xyk - xyL[:, :, tf.newaxis]), -1)
-    xyL_k = tf.squeeze(Rot(-thk[:, 0]) @ (xyL[:, :, tf.newaxis] - xyk), -1)
-    thk_L = (thk - thL[:, tf.newaxis])
-    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
+    xyk_L = tf.squeeze(R @ (xyk - xyL)[:, :, tf.newaxis], -1)
+    xyL_k = tf.squeeze(Rot(-thk) @ (xyL - xyk)[:, :, tf.newaxis], -1)
+    thk_L = (thk - thL)
+    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e1 * tf.nn.relu(tf.abs(thk_L) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
     # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-        process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
-    curvature_loss += curvature_violation
-    obstacles_loss += invalid
-    length_loss += length
+        process_segment(tf.concat([xyk_L, tf.tan(thk_L[:, tf.newaxis]), tf.zeros_like(thk_L)[:, tf.newaxis]], -1), xL, yL, thL, last_ddy, env)
     x_path.append(x_glob)
     y_path.append(y_glob)
     th_path.append(th_glob)
 
+    can_finish = tf.equal(curvature_violation + invalid, 0.0).numpy()[0]
+
     # loss = 1e-1 * curvature_loss + obstacles_loss
-    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    loss = 1e-1 * curvature_loss + obstacles_loss + overshoot_loss * 1e0
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
-    return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
+    return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path, can_finish
 
 
-def _plot(x_path, y_path, th_path, env, step):
+def _plot(x_path, y_path, th_path, env, step, plot=False):
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
@@ -299,13 +180,15 @@ def _plot(x_path, y_path, th_path, env, step):
         for j in range(4):
             fs = env.free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    #plt.xlim(0.0, 15.0)
-    #plt.ylim(0.0, 15.0)
+    # plt.xlim(0.0, 15.0)
+    # plt.ylim(0.0, 15.0)
     plt.xlim(-15.0, 20.0)
     plt.ylim(0.0, 35.0)
-    plt.savefig("last_path" + str(step).zfill(6) + ".png")
-    plt.clf()
-    # plt.show()
+    if plot:
+        plt.show()
+    else:
+        plt.savefig("last_path" + str(step).zfill(6) + ".png")
+        plt.clf()
 
 
 def process_segment(plan, xL, yL, thL, last_ddy, env):
@@ -323,7 +206,8 @@ def process_segment(plan, xL, yL, thL, last_ddy, env):
     length = _calculate_length(x_glob, y_glob)
 
     # calculate violations
-    curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
+    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
+    curvature_violation = tf.reduce_mean(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, env)
@@ -344,7 +228,8 @@ def invalidate(x, y, fi, env):
     penetration = dist(env.free_space, crucial_points)
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
-    violation_level = tf.reduce_sum(in_obstacle, -1)
+    #violation_level = tf.reduce_sum(in_obstacle, -1)
+    violation_level = tf.reduce_mean(in_obstacle, -1)
 
     # violation_level = integral(env.free_space, crucial_points)
     return violation_level

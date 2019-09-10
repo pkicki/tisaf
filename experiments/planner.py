@@ -11,7 +11,7 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
+from models.actor import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
 from utils.utils import Environment
 from dataset.scenarios import Task
 

@@ -18,7 +18,7 @@ def params(q0, q1):
     ddX1 = tf.stack([20 * x1 ** 3, 12 * x1 ** 2, 6 * x1, 2 * ones, zeros, zeros], -1)
 
     A = tf.stack([X0, dX0, ddX0, X1, dX1, ddX1], -1)
-    A = tf.linalg.transpose(A)
+    A = tf.linalg.matrix_transpose(A)
     b = tf.stack([y0, dy0, ddy0, y1, dy1, ddy1], -1)
     return tf.linalg.inv(A) @ tf.expand_dims(b, -1)
 

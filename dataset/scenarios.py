@@ -33,8 +33,8 @@ def get_map(path):
 
 def planning_dataset(path):
     def parse_function(scn_path):
-        #data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
-        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
+        #data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
         p0 = tf.unstack(data[0][:3], axis=0)
         pk = tf.unstack(data[-1][:3], axis=0)
         return p0, pk
@@ -42,16 +42,12 @@ def planning_dataset(path):
     map_path = os.path.join(path, "map.map")
     scenarios = [parse_function(os.path.join(path, f)) for f in os.listdir(path) if f.endswith(".scn")]
     free_space = get_map(map_path)
-
-    ds = tf.data.Dataset.from_tensor_slices(scenarios) \
-        .shuffle(buffer_size=len(scenarios), reshuffle_each_iteration=True)
-
-    return ds, len(scenarios), free_space
+    map(parse_function, scenarios)
+    return scenarios, len(scenarios), free_space
 
 
 def decode_data(data):
-    p0 = data[:, :1]
-    pk = data[:, 1:]
+    p0, pk = data
     x0, y0, th0 = tf.unstack(p0, axis=-1)
     xk, yk, thk = tf.unstack(pk, axis=-1)
-    return x0, y0, th0, xk, yk, thk
+    return x0[tf.newaxis], y0[tf.newaxis], th0[tf.newaxis], xk[tf.newaxis], yk[tf.newaxis], thk[tf.newaxis]
