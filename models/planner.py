@@ -98,9 +98,12 @@ class PlanningNetworkMP(tf.keras.Model):
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
         self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
-        self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
-        self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
-        self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
+        #self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
+        self.y_est = EstimatorLayer(mul=5.)
+        #self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
+        self.dy_est = EstimatorLayer(mul=1., bias=0.0)
+        #self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
+        self.ddy_est = EstimatorLayer(mul=2.)
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
@@ -320,10 +323,11 @@ def process_segment(plan, xL, yL, thL, last_ddy, env):
     x_glob, y_glob, th_glob, curvature = _calculate_global_xyth_and_curvature(p, x, xL, yL, thL)
 
     # calcualte length of segment
-    length = _calculate_length(x_glob, y_glob)
+    length, segments = _calculate_length(x_glob, y_glob)
 
     # calculate violations
-    curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
+    curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - env.max_curvature) * segments, -1)
+    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, env)
