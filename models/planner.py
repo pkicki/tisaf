@@ -99,7 +99,7 @@ class PlanningNetworkMP(tf.keras.Model):
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
         self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
         #self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
-        self.y_est = EstimatorLayer(mul=5.)
+        self.y_est = EstimatorLayer(mul=3.)
         #self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
         self.dy_est = EstimatorLayer(mul=1., bias=0.0)
         #self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
@@ -169,9 +169,12 @@ class PlanningNetwork(tf.keras.Model):
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
-        ex = (xk - x0) / 15.
-        ey = (yk - y0) / 15.
-        eth = (thk - th0) / (2 * pi)
+        #ex = (xk - x0) / 15.
+        #ey = (yk - y0) / 15.
+        #eth = (thk - th0) / (2 * pi)
+        ex = (xk - x0) / 2.5 - 1
+        ey = (yk - y0) / 17.5 - 1
+        eth = (thk - th0) / pi - 1
         inputs = tf.concat([ex, ey, eth], -1)
 
         features = self.preprocessing_stage(inputs, training)
@@ -282,11 +285,13 @@ def plan_loss(plan, data, env):
     y_path.append(y_glob)
     th_path.append(th_glob)
 
+
+    last_length_loss = tf.reduce_sum(tf.nn.relu(length - 5.0))
     # loss = 1e-1 * curvature_loss + obstacles_loss
-    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    loss = (1 - tf.sign(overshoot_loss)) * (curvature_loss + obstacles_loss + last_length_loss) + overshoot_loss * 1e2
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
-    return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
+    return loss, obstacles_loss + curvature_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env, step):
@@ -326,8 +331,8 @@ def process_segment(plan, xL, yL, thL, last_ddy, env):
     length, segments = _calculate_length(x_glob, y_glob)
 
     # calculate violations
-    curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - env.max_curvature) * segments, -1)
-    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
+    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - env.max_curvature) * segments, -1)
+    curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, env)

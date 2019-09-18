@@ -56,7 +56,7 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(5, (args.batch_size, 6))
+    model = PlanningNetworkMP(6, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
     #model = Poly(3, (args.batch_size, 6))
 
