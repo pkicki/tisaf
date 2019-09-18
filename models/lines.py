@@ -206,13 +206,13 @@ def plan_loss(plan, data, env):
     y_path.append(y_glob)
     th_path.append(th_glob)
 
-    last_length_loss = tf.reduce_sum(tf.nn.relu(length - 1.0))
+    last_length_loss = tf.reduce_sum(tf.nn.relu(length - 3.0))
     # loss = 1e-1 * curvature_loss + obstacles_loss
     #loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
     loss = obstacles_loss + some_loss + last_length_loss
-    return loss, obstacles_loss, x_path, y_path, th_path
+    return loss, obstacles_loss, some_loss, last_length_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env, step):
@@ -220,9 +220,10 @@ def _plot(x_path, y_path, th_path, env, step):
         x = x_path[i][0]
         y = y_path[i][0]
         th = th_path[i][0]
-        cp = calculate_car_crucial_points(x, y, th)
-        for p in cp:
-            plt.plot(p[:, 0], p[:, 1])
+        #cp = calculate_car_crucial_points(x, y, th)
+        #for p in cp:
+            #plt.plot(p[:, 0], p[:, 1])
+        plt.plot(x, y)
 
     for i in range(env.free_space.shape[1]):
         for j in range(4):
@@ -257,14 +258,15 @@ def invalidate(x, y, fi, env):
     """
         Check how much specified points violate the environment constraints
     """
-    crucial_points = calculate_car_crucial_points(x, y, fi)
-    crucial_points = tf.stack(crucial_points, -2)
+    #crucial_points = calculate_car_crucial_points(x, y, fi)
+    #crucial_points = tf.stack(crucial_points, -2)
+    crucial_points = tf.stack([x, y], -1)[:, :, tf.newaxis]
 
     d = tf.sqrt(tf.reduce_sum((crucial_points[:, 1:] - crucial_points[:, :-1]) ** 2, -1))
     penetration = dist(env.free_space, crucial_points)
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
-    violation_level = tf.reduce_sum(in_obstacle, -1)
+    violation_level = tf.reduce_mean(in_obstacle, -1)
 
     # violation_level = integral(env.free_space, crucial_points)
     return violation_level
