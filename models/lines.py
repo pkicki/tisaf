@@ -82,7 +82,8 @@ class PlanningNetworkMP(tf.keras.Model):
         # self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         # self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
         self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-1., pre_mul=1.0)
-        self.th_est = EstimatorLayer(mul=pi/6., kernel_init_std=0.1)
+        self.y_est = EstimatorLayer(tf.nn.sigmoid, mul=5., bias=1.0, kernel_init_std=0.1, pre_bias=-1., pre_mul=1.0)
+        #self.th_est = EstimatorLayer(mul=pi/6., kernel_init_std=0.1)
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
@@ -98,8 +99,9 @@ class PlanningNetworkMP(tf.keras.Model):
             # print(features)
 
             x = self.x_est(features, training)
-            th = self.th_est(features, training)
-            p = tf.concat([x, th], -1)
+            #th = self.th_est(features, training)
+            y = self.y_est(features, training)
+            p = tf.concat([x, y], -1)
             parameters.append(p)
 
             x0, y0, th0 = calculate_next_point(p, x0[:, 0], y0[:, 0], th0[:, 0])
@@ -114,10 +116,10 @@ class PlanningNetworkMP(tf.keras.Model):
 
 def calculate_next_point(plan, xL, yL, thL):
     dx = plan[:, 0]
-    dth = plan[:, 1]
+    dy = plan[:, 1]
 
     # calculate xy coords of segment
-    x_glob, y_glob, th_glob = _calculate_global_xyth(dx, dth, xL, yL, thL)
+    x_glob, y_glob, th_glob = _calculate_global_xyth(dx, dy, xL, yL, thL)
 
     return x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
@@ -177,8 +179,9 @@ def plan_loss(plan, data, env):
     # regular path
     for i in range(num_gpts):
         # with tf.GradientTape() as tape:
-        x_glob, y_glob, th_glob, invalid, length, xL, yL, thL = process_segment(plan[:, :, i], xL, yL, thL, env)
+        x_glob, y_glob, th_glob, invalid, length, dth_loss, xL, yL, thL = process_segment(plan[:, :, i], xL, yL, thL, env)
         obstacles_loss += invalid
+        curvature_loss += dth_loss
 
         # grad = tape.gradient(curvature_violation, plan[:, :, i])
         # grad = tape.gradient(curvature_loss, curvature_violation)
@@ -193,14 +196,17 @@ def plan_loss(plan, data, env):
     xyL = tf.stack([xL, yL], -1)
     xyk = tf.concat([xk, yk], 1)
     xyk_L = xyk - xyL
-    dx = tf.sqrt(tf.reduce_sum(tf.square(xyk_L), -1))
-    dth = tf.atan2(xyk_L[:, 1], xyk_L[:, 0]) - thL
+    R = Rot(thL)
+    xyk_L = tf.matmul(R, xyk_L[:, :, tf.newaxis], transpose_a=True)
+    dx = xyk_L[:, 0, 0]
+    dy = xyk_L[:, 1, 0]
     # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     some_loss = tf.reduce_sum(tf.nn.relu(tf.abs(thk - thL) - pi / 6))
-    x_glob, y_glob, th_glob, invalid, length, xL, yL, thL = \
-        process_segment(tf.stack([dx, dth], -1), xL, yL, thL, env)
+    x_glob, y_glob, th_glob, invalid, length, dth_loss, xL, yL, thL = \
+        process_segment(tf.stack([dx, dy], -1), xL, yL, thL, env)
     obstacles_loss += invalid
+    curvature_loss += dth_loss
     length_loss += length
     x_path.append(x_glob)
     y_path.append(y_glob)
@@ -211,8 +217,8 @@ def plan_loss(plan, data, env):
     #loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
-    loss = obstacles_loss + some_loss + last_length_loss
-    return loss, obstacles_loss, some_loss, last_length_loss, x_path, y_path, th_path
+    loss = obstacles_loss + curvature_loss + last_length_loss + some_loss
+    return loss, obstacles_loss, curvature_loss, last_length_loss, some_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env, step):
@@ -245,13 +251,15 @@ def process_segment(plan, xL, yL, thL, env):
     # calculate xy coords of segment
     x_glob, y_glob, th_glob = _calculate_global_xyth(dx, dth, xL, yL, thL)
 
+    dth_loss = tf.nn.relu(tf.abs(th_glob[:, -1] - thL) - pi / 6)
+
     # calcualte length of segment
     length, segments = _calculate_length(x_glob, y_glob)
 
     # calculate violations
     invalid = invalidate(x_glob, y_glob, th_glob, env)
 
-    return x_glob, y_glob, th_glob, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
+    return x_glob, y_glob, th_glob, invalid, length, dth_loss, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
 
 def invalidate(x, y, fi, env):
@@ -272,16 +280,19 @@ def invalidate(x, y, fi, env):
     return violation_level
 
 
-def _calculate_global_xyth(dx, dth, xL, yL, thL):
+def _calculate_global_xyth(dx, dy, xL, yL, thL):
     x_local_sequence = tf.expand_dims(dx, -1)
     x_local_sequence *= tf.linspace(0.0, 1.0, 128)
 
-    y_local_sequence = 0.0 * x_local_sequence
-    R = Rot(thL + dth)
+    y_local_sequence = tf.expand_dims(dy, -1)
+    y_local_sequence *= tf.linspace(0.0, 1.0, 128)
+
+    R = Rot(thL)
     xy_glob = R @ tf.stack([x_local_sequence, y_local_sequence], 1)
     xy_glob += tf.expand_dims(tf.stack([xL, yL], -1), -1)
 
     x_glob, y_glob = tf.unstack(xy_glob, axis=1)
 
+    dth = tf.atan2(dy, dx)
     th_glob = thL[:, tf.newaxis] + tf.tile(dth[:, tf.newaxis], [1, 128])
     return x_glob, y_glob, th_glob

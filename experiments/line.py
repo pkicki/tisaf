@@ -103,14 +103,14 @@ def main(args):
                 #total_loss = model_loss
                 #invalid_loss = model_loss
 
-                model_loss, invalid_loss, curv_loss, last_length_loss, x_path, y_path, th_path = plan_loss(output, data, env)
+                model_loss, invalid_loss, curv_loss, last_length_loss, some_loss, x_path, y_path, th_path = plan_loss(output, data, env)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
-            g1 = tape.gradient(invalid_loss, model.trainable_variables)
-            print(g1)
+            #g1 = tape.gradient(invalid_loss, model.trainable_variables)
+            #print(g1)
 
             #grads = [tf.clip_by_value(g, -1., 1.) for g in grads]
             #grads = [tf.clip_by_norm(g, 1.) for g in grads]
@@ -137,6 +137,7 @@ def main(args):
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/last_length_loss', last_length_loss, step=train_step)
                 tfc.summary.scalar('metrics/curvature_loss', curv_loss, step=train_step)
+                tfc.summary.scalar('metrics/some_loss', some_loss, step=train_step)
                 #tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
