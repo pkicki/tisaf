@@ -28,7 +28,7 @@ def _calculate_length(x, y):
     dy = y[:, 1:] - y[:, :-1]
     lengths = tf.sqrt(dx ** 2 + dy ** 2)
     length = tf.reduce_sum(lengths, -1)
-    return length
+    return length, lengths
 
 
 class Environment:

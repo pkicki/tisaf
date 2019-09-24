@@ -3,6 +3,8 @@ import os
 import sys
 import numpy as np
 
+from models.lines import Line
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -11,7 +13,7 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.actor import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
+from models.lines import plan_loss, _plot, PlanningNetworkMP
 from utils.utils import Environment
 from dataset.scenarios import Task
 
@@ -56,9 +58,9 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(6, (args.batch_size, 6))
+    model = PlanningNetworkMP(8, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
-    #model = Poly(3, (args.batch_size, 6))
+    #model = Line(3, (args.batch_size, 6))
 
     # 3. Optimization
 
@@ -75,6 +77,8 @@ def main(args):
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
 
+    experiment_handler.restore("./results/lines/checkpoints/last_n-10")
+
     # 5. Run everything
     train_step, val_step = 0, 0
     best_accuracy = 0.0
@@ -90,14 +94,27 @@ def main(args):
         acc = []
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
-            with tf.GradientTape() as tape:
+            with tf.GradientTape(persistent=True) as tape:
                 output = model(data, training=True)
-                model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data, env)
+                #print(output)
+
+                #label = tf.ones_like(output)[:, :1, :]
+                #label = tf.concat([4.0 * label, label * 0.0], 1)
+                #model_loss = tf.keras.losses.mean_absolute_error(label, output)
+                #total_loss = model_loss
+                #invalid_loss = model_loss
+
+                model_loss, invalid_loss, curv_loss, last_length_loss, some_loss, x_path, y_path, th_path = plan_loss(output, data, env)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = tf.reduce_mean(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
+            #print("LOSS:", total_loss)
+            #print("GRAD:", grads[-1])
+            #g1 = tape.gradient(invalid_loss, model.trainable_variables)
+            #print(g1)
+
             #grads = [tf.clip_by_value(g, -1., 1.) for g in grads]
             #grads = [tf.clip_by_norm(g, 1.) for g in grads]
             #print("AFTER:", grads[0])
@@ -121,8 +138,9 @@ def main(args):
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
-                tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
-                tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
+                tfc.summary.scalar('metrics/last_length_loss', last_length_loss, step=train_step)
+                tfc.summary.scalar('metrics/curvature_loss', curv_loss, step=train_step)
+                tfc.summary.scalar('metrics/some_loss', some_loss, step=train_step)
                 #tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', s, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
@@ -146,41 +164,43 @@ def main(args):
         # accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
         experiment_handler.log_validation()
         acc = []
-        #for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
-        #    # 5.2.1 Make inference of the model for validation and calculate losses
-        #    output = model(task, training=False)
-        #    model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+        for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
+            # 5.2.1 Make inference of the model for validation and calculate losses
+            output = model(task, training=False)
+            model_loss, invalid_loss, curv_loss, last_length_loss, some_loss, x_path, y_path, th_path = plan_loss(
+                output, data, env)
 
-        #    s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
-        #    acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
 
-        #    # 5.1.2 Calculate statistics
-        #    # prediction = tf.argmax(output, -1, output_type=tf.int32)
-        #    # accuracy(prediction, labels)
-        #    # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
+            # 5.1.2 Calculate statistics
+            # prediction = tf.argmax(output, -1, output_type=tf.int32)
+            # accuracy(prediction, labels)
+            # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
 
-        #    # 5.2.3 Print logs for particular interval
-        #    with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
-        #        tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
-        #        tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
-        #        tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
-        #        tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
-        #        tfc.summary.scalar('metrics/good_paths', s, step=val_step)
+            # 5.2.3 Print logs for particular interval
+            with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
+                tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
+                tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
+                tfc.summary.scalar('metrics/last_length_loss', last_length_loss, step=val_step)
+                tfc.summary.scalar('metrics/curvature_loss', curv_loss, step=val_step)
+                tfc.summary.scalar('metrics/good_paths', s, step=val_step)
+                tfc.summary.scalar('metrics/some_loss', some_loss, step=train_step)
 
-        #    # 5.2.4 Update meta variables
-        #    val_step += 1
+            # 5.2.4 Update meta variables
+            val_step += 1
 
-        #epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
+        epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
-        ## 5.2.5 Take statistics over epoch
-        #with tfc.summary.always_record_summaries():
-        #    tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
+        # 5.2.5 Take statistics over epoch
+        with tfc.summary.always_record_summaries():
+            tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
-        ## 5.3 Save last and best
+        # 5.3 Save last and best
         #if epoch_accuracy > best_accuracy:
         #    experiment_handler.save_best()
         #    best_accuracy = epoch_accuracy
-        ## experiment_handler.save_last()
+        experiment_handler.save_last()
 
         experiment_handler.flush()
 
