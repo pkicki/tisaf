@@ -161,7 +161,8 @@ def plan_loss(plan, env, x0, y0, th0, xk, yk, thk):
     can_finish = tf.equal(curvature_violation + invalid, 0.0).numpy()[0]
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
-    loss = 1e-1 * curvature_loss + obstacles_loss + overshoot_loss * 1e0
+    #loss = 1e-1 * curvature_loss + obstacles_loss + overshoot_loss * 1e0
+    loss = obstacles_loss + overshoot_loss * 1e0
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
     return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path, can_finish

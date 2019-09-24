@@ -87,19 +87,20 @@ def main(args):
         ddy = tf.zeros_like(x0)[tf.newaxis]
         k = 0
         N = 5
-        tau = 0.1
-        gamma = 0.9
+        tau = 0.005
+        gamma = 0.99
         # print(xs, ys, ths)
         p = []
         while True:
             # print(xs, ys, ths)
             params = actor(xs, ys, ths, ddy, xk, yk, thk)
-            #params = tf.random_normal(tf.shape(params), params, tf.stack([0.1, 0.1, 0.05, 0.05], 0)[tf.newaxis])
-            params = tf.random_normal(tf.shape(params), params, tf.stack([1.0, 1.0, 0.3, 0.3], 0)[tf.newaxis])
+            # params = tf.random_normal(tf.shape(params), params, tf.stack([0.1, 0.1, 0.05, 0.05], 0)[tf.newaxis])
+            #params = tf.random_normal(tf.shape(params), params, tf.stack([1.0, 1.0, 0.3, 0.3], 0)[tf.newaxis])
+            params = tf.random_normal(tf.shape(params), params, tf.stack([0.1, 0.1, 0.01, 0.01], 0)[tf.newaxis])
             px = params[:, 0]
-            py = params[:, 0]
-            pdy = params[:, 0]
-            pddy = params[:, 0]
+            py = params[:, 1]
+            pdy = params[:, 2]
+            pddy = params[:, 3]
             px = tf.abs(px)
             pdy = tf.clip_by_value(pdy, -pi, pi)
             params = tf.stack([px, py, pdy, pddy], -1)
@@ -120,19 +121,18 @@ def main(args):
                 print("FINISHED!!!!")
 
             xn, yn, thn = calculate_next_point(params, xs, ys, ths, ddy)
-            xs = xn
-            ys = yn
-            ths = thn
-            ddy = params[:, -1]
-            # print(xn, yn, thn)
 
-            episode_finished = k >= N or can_finish or invalid_loss.numpy() > 0.0
-
+            episode_finished = k >= N or can_finish or invalid_loss.numpy()[0] > 0.0
             replay_buffer.add((xs, ys, ths, ddy, xk, yk, thk), params, reward, (xn, yn, thn, ddy, xk, yk, thk),
                               episode_finished)
 
             if episode_finished:
                 break
+            xs = xn
+            ys = yn
+            ths = thn
+            ddy = params[:, -1]
+            # print(xn, yn, thn)
             k += 1
 
         if replay_buffer.count() > 128:
@@ -161,14 +161,17 @@ def main(args):
                 q = critic(x0, y0, th0, ddy0, xk, yk, thk, action)
                 q_pi = critic(x0, y0, th0, ddy0, xk, yk, thk, pi_action)
                 y = tf.stop_gradient(
-                    rewards + gamma * (1 - can_finish) * target_critic(xn, yn, thn, ddyn, xk, yk, thk, next_action))
+                    rewards + gamma * (1 - can_finish[:, tf.newaxis]) * target_critic(xn, yn, thn, ddyn, xk, yk, thk, next_action))
 
-                #model_loss, invalid_loss, overshoot_loss, curvature_loss, \
-                #x_path, y_path, th_path, can_finish = plan_loss(action[:1, :, tf.newaxis], env, x0[0], y0[0], th0[0], xk[0], yk[0], thk[0])
+                model_loss, invalid_loss, overshoot_loss, curvature_loss, \
+                x_path, y_path, th_path, can_finish = plan_loss(pi_action[:1, :, tf.newaxis], env, x0[0], y0[0], th0[0],
+                                                                xk[0], yk[0], thk[0])
                 #_plot(x_path, y_path, th_path, env, train_step, True)
+                _plot(x_path, y_path, th_path, env, train_step)
 
                 critic_loss = tf.keras.losses.mean_squared_error(y, q)
-                actor_loss = -tf.reduce_mean(q_pi)
+                actor_loss = tf.reduce_mean(-q_pi)
+
             critic_grads = tape.gradient(critic_loss, critic.trainable_variables)
             critic_optimizer.apply_gradients(zip(critic_grads, critic.trainable_variables),
                                              global_step=tf.train.get_or_create_global_step())
