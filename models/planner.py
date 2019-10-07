@@ -25,18 +25,18 @@ class EstimatorLayer(tf.keras.Model):
         self.pre_bias = pre_bias
         self.activation = activation
         self.features = [
-            # tf.keras.layers.Dense(64, activation,
-            #                     kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
-            tf.keras.layers.Dense(1, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
-        ]
+            tf.keras.layers.Dense(64, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
+            ]
+        self.out = tf.keras.layers.Dense(1, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std))
 
     def call(self, inputs, training=None):
         x = inputs
         for layer in self.features:
             x = layer(x)
-            x *= self.pre_mul
-            x += self.pre_bias
-            x = self.activation(x)
+        x = self.out(x)
+        x *= self.pre_mul
+        x += self.pre_bias
+        x = self.activation(x)
         x *= self.mul
         x += self.bias
         return x
@@ -94,16 +94,21 @@ class PlanningNetworkMP(tf.keras.Model):
         # n = 128
         self.num_segments = num_segments - 1
 
-        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
+        #self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
+        self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
         self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=1.0, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
+        #self.x_est = EstimatorLayer(tf.exp)
         #self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
-        self.y_est = EstimatorLayer(mul=5.)
+        #self.y_est = EstimatorLayer(mul=5.)
+        self.y_est = EstimatorLayer(tf.identity)
         #self.dy_est = EstimatorLayer(mul=1., bias=0.0, pre_mul=0.1)
-        self.dy_est = EstimatorLayer(mul=1., bias=0.0)
+        #self.dy_est = EstimatorLayer(mul=2., bias=0.0)
+        self.dy_est = EstimatorLayer(tf.identity)
         #self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
-        self.ddy_est = EstimatorLayer(mul=2.)
+        #self.ddy_est = EstimatorLayer(mul=4.)
+        self.ddy_est = EstimatorLayer(tf.identity)
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
@@ -118,6 +123,10 @@ class PlanningNetworkMP(tf.keras.Model):
 
             features = self.preprocessing_stage(inputs, training)
             #print(features)
+            #a = features[0]
+            #b = features[1]
+            #c = tf.abs(a - b)
+            #features = tf.stop_gradient(features)
 
             x = self.x_est(features, training)
             y = self.y_est(features, training)
@@ -243,15 +252,18 @@ def plan_loss(plan, data, env):
     curvature_loss = 0.0
     obstacles_loss = 0.0
     length_loss = 0.0
+    lengths = []
     x_path = []
     y_path = []
     th_path = []
+    cvs = []
     # regular path
     for i in range(num_gpts):
         # with tf.GradientTape() as tape:
         x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
             process_segment(plan[:, :, i], xL, yL, thL, last_ddy, env)
         curvature_loss += curvature_violation
+        cvs.append(curvature_violation)
         obstacles_loss += invalid
 
         # grad = tape.gradient(curvature_violation, plan[:, :, i])
@@ -259,9 +271,11 @@ def plan_loss(plan, data, env):
         # print(grad)
 
         length_loss += length
+        lengths.append(length)
         x_path.append(x_glob)
         y_path.append(y_glob)
         th_path.append(th_glob)
+        last_ddy = plan[:, 3, i]
 
     # finishing segment
     xyL = tf.stack([xL, yL], -1)
@@ -270,7 +284,7 @@ def plan_loss(plan, data, env):
     xyk_L = tf.squeeze(R @ (xyk - xyL[:, :, tf.newaxis]), -1)
     xyL_k = tf.squeeze(Rot(-thk[:, 0]) @ (xyL[:, :, tf.newaxis] - xyk), -1)
     thk_L = (thk - thL[:, tf.newaxis])
-    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
+    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
     # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
@@ -278,15 +292,27 @@ def plan_loss(plan, data, env):
     curvature_loss += curvature_violation
     obstacles_loss += invalid
     length_loss += length
+    cvs.append(curvature_violation)
+    lengths.append(length)
     x_path.append(x_glob)
     y_path.append(y_glob)
     th_path.append(th_glob)
 
+    lengths = tf.stack(lengths, -1)
+    non_balanced_loss = tf.reduce_sum(
+        tf.abs(lengths - length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32)), -1)
+
     # loss = 1e-1 * curvature_loss + obstacles_loss
+
+    #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    #print(tf.stack(cvs, -1).numpy())
+
     # loss = obstacles_loss #+ overshoot_loss * 1e2
     # loss = overshoot_loss * 1e2
-    return loss, obstacles_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path
+    return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, env, step):

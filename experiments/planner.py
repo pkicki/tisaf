@@ -45,7 +45,9 @@ def main(args):
     val_ds, val_size, _ = scenarios.planning_dataset(args.scenario_path)
     #env = Environment(free_space, 1. / 2.57 * np.tan(np.pi * 50 / 180))
     #env = Environment(free_space, 1. / 5.3)
-    env = Environment(free_space, 1. / 2.3)
+    #env = Environment(free_space, 1. / 4.5)
+    env = Environment(free_space, 1. / 4.2)
+    #env = Environment(free_space, 1. / 2.3)
 
     #train_ds = train_ds \
     #    .batch(args.batch_size) \
@@ -56,7 +58,7 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(5, (args.batch_size, 6))
+    model = PlanningNetworkMP(7, (args.batch_size, 6))
     #model = PlanningNetwork(3, (args.batch_size, 6))
     #model = Poly(3, (args.batch_size, 6))
 
@@ -70,10 +72,22 @@ def main(args):
         args.train_beta)
     eta.assign(eta_f())
     optimizer = tf.train.AdamOptimizer(eta)
+    #optimizer = tf.train.GradientDescentOptimizer(eta)
     l2_reg = tf.keras.regularizers.l2(1e-5)
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+
+    #experiment_handler.restore("./results/I/checkpoints/last_n-141")
+    #experiment_handler.restore("./results/II/checkpoints/last_n-1102")
+
+    experiment_handler.restore("./results/last/checkpoints/last_n-11945")
+
+    #experiment_handler.restore("./results/allinone/checkpoints/best-333")
+    #experiment_handler.restore("./results/cl/checkpoints/last_n-178")
+    #experiment_handler.restore("./results/almost/checkpoints/best-3002")
+
+    #experiment_handler.restore("./results/cl_l/checkpoints/last_n-1665")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -90,29 +104,41 @@ def main(args):
         acc = []
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
-            with tf.GradientTape() as tape:
+            with tf.GradientTape(persistent=True) as tape:
                 output = model(data, training=True)
-                model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data, env)
+                model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, data, env)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
-                total_loss = tf.reduce_mean(model_loss)  # + reg_loss
+                #total_loss = tf.reduce_mean(model_loss)  # + reg_loss
+                total_loss = model_loss
+                #total_loss = tf.reduce_sum(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
+            #g1 = tape.gradient(curvature_loss, model.trainable_variables)
+            #g2 = tape.gradient(invalid_loss, model.trainable_variables)
+            #g3 = tape.gradient(overshoot_loss, model.trainable_variables)
+            #g4 = tape.gradient(model_loss, model.trainable_variables)
             #grads = [tf.clip_by_value(g, -1., 1.) for g in grads]
             #grads = [tf.clip_by_norm(g, 1.) for g in grads]
-            #print("AFTER:", grads[0])
+            #print("CURV:", g1[-1])
+            #print("INV:", g2[-1])
+            #print("OVER:", g3[-1])
+            #print("MOD:", g4[-1])
+            #print("ALL:", grads[-1])
+            #print("VAR:", model.trainable_variables[-1])
             #print("LOSS", total_loss)
             #print("GRADS")
             #for k, n in enumerate(model.trainable_variables):
+            #    print(tf.reduce_sum(grads[k]))
             #    print(i, n.name)
             ##    print(n)
-            #    print(grads[k])
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
             # 5.1.3 Calculate statistics
-            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
-            acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
+            acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
             # prediction = tf.argmax(output, -1, output_type=tf.int32)
             # accuracy(prediction, labels)
             # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
@@ -123,8 +149,10 @@ def main(args):
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
                 tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
+                tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
                 #tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
-                tfc.summary.scalar('metrics/good_paths', s, step=train_step)
+                tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
+                tfc.summary.scalar('metrics/good_paths', t, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
 
             # 5.1.5 Update meta variables
@@ -144,14 +172,15 @@ def main(args):
 
         # 5.2. Validation Loop
         # accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
-        experiment_handler.log_validation()
-        acc = []
+        #experiment_handler.log_validation()
+        #acc = []
         #for i, task in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
         #    # 5.2.1 Make inference of the model for validation and calculate losses
         #    output = model(task, training=False)
-        #    model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+        #    model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, task, env)
 
-        #    s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+        #    t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+        #    s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
         #    acc.append(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
 
         #    # 5.1.2 Calculate statistics
@@ -165,7 +194,9 @@ def main(args):
         #        tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
         #        tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
         #        tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
-        #        tfc.summary.scalar('metrics/good_paths', s, step=val_step)
+        #        tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/really_good_paths', s, step=val_step)
+        #        tfc.summary.scalar('metrics/good_paths', t, step=val_step)
 
         #    # 5.2.4 Update meta variables
         #    val_step += 1
@@ -180,7 +211,7 @@ def main(args):
         #if epoch_accuracy > best_accuracy:
         #    experiment_handler.save_best()
         #    best_accuracy = epoch_accuracy
-        ## experiment_handler.save_last()
+        experiment_handler.save_last()
 
         experiment_handler.flush()
 
