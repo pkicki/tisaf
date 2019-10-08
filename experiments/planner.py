@@ -79,7 +79,10 @@ def main(args):
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
 
     #experiment_handler.restore("./results/I/checkpoints/last_n-200")
-    experiment_handler.restore("./results/II/checkpoints/last_n-4050")
+    #experiment_handler.restore("./results/II/checkpoints/last_n-4050")
+
+    experiment_handler.restore("./results/vl_I/checkpoints/last_n-95")
+    #experiment_handler.restore("./results/II/checkpoints/last_n-4050")
 
     #experiment_handler.restore("./results/last/checkpoints/last_n-11945")
 
