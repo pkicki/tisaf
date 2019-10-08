@@ -25,6 +25,7 @@ class EstimatorLayer(tf.keras.Model):
         self.pre_bias = pre_bias
         self.activation = activation
         self.features = [
+            tf.keras.layers.Dense(128, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
             tf.keras.layers.Dense(64, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
             ]
         self.out = tf.keras.layers.Dense(1, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std))
@@ -257,14 +258,16 @@ def plan_loss(plan, data, env):
     y_path = []
     th_path = []
     cvs = []
+    future_mul = 1.0
+    MUL = 1.0
     # regular path
     for i in range(num_gpts):
         # with tf.GradientTape() as tape:
         x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
             process_segment(plan[:, :, i], xL, yL, thL, last_ddy, env)
-        curvature_loss += curvature_violation
+        curvature_loss += curvature_violation * future_mul
         cvs.append(curvature_violation)
-        obstacles_loss += invalid
+        obstacles_loss += invalid * future_mul
 
         # grad = tape.gradient(curvature_violation, plan[:, :, i])
         # grad = tape.gradient(curvature_loss, curvature_violation)
@@ -276,6 +279,7 @@ def plan_loss(plan, data, env):
         y_path.append(y_glob)
         th_path.append(th_glob)
         last_ddy = plan[:, 3, i]
+        future_mul *= MUL
 
     # finishing segment
     xyL = tf.stack([xL, yL], -1)
@@ -289,8 +293,8 @@ def plan_loss(plan, data, env):
     # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
         process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
-    curvature_loss += curvature_violation
-    obstacles_loss += invalid
+    curvature_loss += curvature_violation * future_mul
+    obstacles_loss += invalid * future_mul
     length_loss += length
     cvs.append(curvature_violation)
     lengths.append(length)
@@ -305,8 +309,8 @@ def plan_loss(plan, data, env):
     # loss = 1e-1 * curvature_loss + obstacles_loss
 
     #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
-    #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    #loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     #print(tf.stack(cvs, -1).numpy())
 

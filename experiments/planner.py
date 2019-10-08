@@ -78,10 +78,10 @@ def main(args):
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
 
-    #experiment_handler.restore("./results/I/checkpoints/last_n-141")
-    #experiment_handler.restore("./results/II/checkpoints/last_n-1102")
+    #experiment_handler.restore("./results/I/checkpoints/last_n-200")
+    experiment_handler.restore("./results/II/checkpoints/last_n-4050")
 
-    experiment_handler.restore("./results/last/checkpoints/last_n-11945")
+    #experiment_handler.restore("./results/last/checkpoints/last_n-11945")
 
     #experiment_handler.restore("./results/allinone/checkpoints/best-333")
     #experiment_handler.restore("./results/cl/checkpoints/last_n-178")
