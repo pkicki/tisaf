@@ -110,12 +110,14 @@ class PlanningNetworkMP(tf.keras.Model):
         #self.ddy_est = EstimatorLayer(mul=2., pre_mul=0.1)
         #self.ddy_est = EstimatorLayer(mul=4.)
         self.ddy_est = EstimatorLayer(tf.identity)
+        self.last_ddy_est = EstimatorLayer(tf.identity)
 
     def call(self, data, training=None):
         x0, y0, th0, xk, yk, thk = decode_data(data)
         last_ddy = tf.zeros_like(x0)
 
         parameters = []
+        features = None
         for i in range(self.num_segments):
             ex = (xk - x0) / 15.
             ey = (yk - y0) / 15.
@@ -144,7 +146,9 @@ class PlanningNetworkMP(tf.keras.Model):
 
         parameters = tf.stack(parameters, -1)
 
-        return parameters
+        last_ddy = self.last_ddy_est(features, training)
+
+        return parameters, last_ddy
 
 
 def calculate_next_point(plan, xL, yL, thL, last_ddy):
@@ -243,7 +247,7 @@ class Poly(tf.keras.Model):
         return p
 
 
-def plan_loss(plan, data, env):
+def plan_loss(plan, very_last_ddy, data, env):
     num_gpts = plan.shape[-1]
     x0, y0, th0, xk, yk, thk = decode_data(data)
     xL = x0[:, 0]
@@ -292,7 +296,7 @@ def plan_loss(plan, data, env):
     # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-        process_segment(tf.concat([xyk_L, tf.tan(thk_L), tf.zeros_like(thk_L)], -1), xL, yL, thL, last_ddy, env)
+        process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, env)
     curvature_loss += curvature_violation * future_mul
     obstacles_loss += invalid * future_mul
     length_loss += length
@@ -319,7 +323,7 @@ def plan_loss(plan, data, env):
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
 
-def _plot(x_path, y_path, th_path, env, step):
+def _plot(x_path, y_path, th_path, env, step, print=False):
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
@@ -336,9 +340,11 @@ def _plot(x_path, y_path, th_path, env, step):
     #plt.ylim(0.0, 15.0)
     plt.xlim(-15.0, 20.0)
     plt.ylim(0.0, 35.0)
-    plt.savefig("last_path" + str(step).zfill(6) + ".png")
-    plt.clf()
-    # plt.show()
+    if print:
+        plt.show()
+    else:
+        plt.savefig("last_path" + str(step).zfill(6) + ".png")
+        plt.clf()
 
 
 def process_segment(plan, xL, yL, thL, last_ddy, env):
