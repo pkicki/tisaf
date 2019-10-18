@@ -99,7 +99,7 @@ class PlanningNetworkMP(tf.keras.Model):
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
-        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=0.1, kernel_init_std=0.1, pre_bias=-5., pre_mul=1.0)
+        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=0.1, kernel_init_std=0.1, pre_bias=0., pre_mul=1.0)
         #self.x_est = EstimatorLayer(tf.exp)
         #self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
         #self.y_est = EstimatorLayer(mul=5.)
@@ -393,6 +393,7 @@ def invalidate(x, y, fi, env):
 def _calculate_global_xyth_and_curvature(params, x, xL, yL, thL):
     x_local_sequence = tf.expand_dims(x, -1)
     x_local_sequence *= tf.linspace(0.0, 1.0, 128)
+    #x_local_sequence *= tf.linspace(0.0, 1.0, 512)
     curv, dX, dY = curvature(params, x_local_sequence)
 
     X = tf.stack([x_local_sequence ** 5, x_local_sequence ** 4, x_local_sequence ** 3, x_local_sequence ** 2,
