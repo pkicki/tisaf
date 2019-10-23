@@ -34,19 +34,35 @@ def get_map(path):
 def planning_dataset(path):
     def parse_function(scn_path):
         data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
-        #data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        # data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
         p0 = tf.unstack(data[0][:3], axis=0)
         pk = tf.unstack(data[-1][:3], axis=0)
         return p0, pk
 
-    map_path = os.path.join(path, "map.map")
     scenarios = [parse_function(os.path.join(path, f)) for f in os.listdir(path) if f.endswith(".scn")]
-    free_space = get_map(map_path)
+    free_space = load_map(path)
 
     ds = tf.data.Dataset.from_tensor_slices(scenarios) \
         .shuffle(buffer_size=len(scenarios), reshuffle_each_iteration=True)
 
     return ds, len(scenarios), free_space
+
+
+def planning_tensor(path):
+    def parse_function(scn_path):
+        data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
+        # data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        p0 = tf.unstack(data[0][:3], axis=0)
+        pk = tf.unstack(data[-1][:3], axis=0)
+        return p0, pk
+
+    return [parse_function(os.path.join(path, f)) for f in os.listdir(path) if f.endswith(".scn")]
+
+
+def load_map(path):
+    map_path = os.path.join(path, "map.map")
+    free_space = get_map(map_path)
+    return free_space
 
 
 def decode_data(data):

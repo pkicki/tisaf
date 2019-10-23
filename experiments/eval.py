@@ -16,7 +16,7 @@ sys.path.insert(0, parentdir)
 from dataset import scenarios
 from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
 from utils.utils import Environment
-from dataset.scenarios import Task
+from dataset.scenarios import Task, load_map
 
 from argparse import ArgumentParser
 
@@ -59,7 +59,11 @@ def main(args):
 
     #experiment_handler.restore("./results/test_generalizacji/1/checkpoints/best-1480")
     #experiment_handler.restore("./results/test_generalizacji/2/checkpoints/last_n-2017")
-    experiment_handler.restore("./results/test_generalizacji/3/checkpoints/last_n-2643")
+    #experiment_handler.restore("./results/test_generalizacji/3/checkpoints/last_n-2643")
+    #experiment_handler.restore("./results/test_generalizacji/3_biggernet/checkpoints/last_n-2525")
+    #experiment_handler.restore("./results/test_generalizacji/3_supervised/checkpoints/last_n-823")
+    #experiment_handler.restore("./results/test_generalizacji/3_supervised_slower/checkpoints/last_n-331")
+    experiment_handler.restore("./working_dir/planner_net_/checkpoints/last_n-700")
 
 
     # 5. Run everything
@@ -71,7 +75,7 @@ def main(args):
     #y = tf.linspace(2.0, 2.15, yn)[tf.newaxis, :, tf.newaxis]
     y = tf.linspace(1.8, 2.6, yn)[tf.newaxis, :, tf.newaxis]
     #th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] + pi / 2
-    th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] + pi / 2
+    th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] + 1.57#pi / 2
     x = tf.tile(x, [1, yn, thn])
     y = tf.tile(y, [xn, 1, thn])
     th = tf.tile(th, [xn, yn, 1])
