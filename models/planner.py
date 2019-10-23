@@ -27,6 +27,7 @@ class EstimatorLayer(tf.keras.Model):
         self.features = [
             tf.keras.layers.Dense(128, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
             tf.keras.layers.Dense(64, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
+            tf.keras.layers.Dense(64, tf.nn.tanh, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
             ]
         self.out = tf.keras.layers.Dense(1, kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std))
 
@@ -51,7 +52,9 @@ class FeatureExtractorLayer(tf.keras.Model):
     def __init__(self, num_features, input_shape, activation=tf.keras.activations.tanh, kernel_init_std=0.1):
         super(FeatureExtractorLayer, self).__init__()
         self.features = [
-            tf.keras.layers.Dense(32, activation,
+            tf.keras.layers.Dense(64, activation,
+                                  kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
+            tf.keras.layers.Dense(num_features, activation,
                                   kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
             tf.keras.layers.Dense(num_features, activation,
                                   kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std)),
@@ -99,7 +102,7 @@ class PlanningNetworkMP(tf.keras.Model):
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
         #self.x_est = EstimatorLayer(tf.nn.elu, bias=1.0, kernel_init_std=1.0)
         #self.x_est = EstimatorLayer(tf.abs, bias=1.0, kernel_init_std=1.0)
-        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=0.1, kernel_init_std=0.1, pre_bias=0., pre_mul=1.0)
+        self.x_est = EstimatorLayer(tf.nn.sigmoid, mul=10., bias=0.1, kernel_init_std=0.1, pre_bias=-1., pre_mul=1.0)
         #self.x_est = EstimatorLayer(tf.exp)
         #self.y_est = EstimatorLayer(mul=10., pre_mul=0.1)
         #self.y_est = EstimatorLayer(mul=5.)
