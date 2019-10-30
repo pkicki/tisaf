@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.image as mpimg
 from utils.utils import Pose2D
+from PIL import Image
 
 tf.enable_eager_execution()
 
@@ -61,7 +62,10 @@ def planning_dataset(path):
 
     def gen():
         for i in range(len(scenarios)):
-            map_img = mpimg.imread(imgs[i])
+            map_img = Image.open(imgs[i])
+            map_img = map_img.resize((256, 256))
+            map_img = np.asarray(map_img)
+            #map_img = mpimg.imread(imgs[i])
             map_img = tf.cast(tf.stack([tf.equal(map_img, 0), tf.not_equal(map_img, 0)], -1), tf.float32)
             yield scenarios[i][0], scenarios[i][1], maps[i], map_img
 

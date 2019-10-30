@@ -70,10 +70,11 @@ def prostopadle(path, id=0):
     free_space = np.reshape(free_space, (-1, 8))
     np.savetxt(fname + ".map", free_space, fmt='%.2f', delimiter=' ')
 
-    p0pk = np.array([[x0, y0, th0, ddy0], [xk, yk ,thk, 0.0]])
+    p0pk = np.array([[x0, y0, th0, ddy0], [xk, yk, thk, 0.0]])
     np.savetxt(fname + ".scn", p0pk, fmt='%.4f', delimiter='\t')
 
 
-path = "../../data/train/parkowanie_prostopadle/"
-for i in range(2048):
+#path = "../../data/train/parkowanie_prostopadle/"
+path = "../../data/val/parkowanie_prostopadle/"
+for i in range(128):
     prostopadle(path, i)

@@ -4,6 +4,7 @@ import sys
 import numpy as np
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+from models.maps import MapAE
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -54,6 +55,8 @@ def main(args):
 
     # 2. Define model
     model = PlanningNetworkMP(7, (args.batch_size, 6))
+    #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
+    mapae = MapAE()
 
     # 3. Optimization
 
@@ -70,9 +73,11 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+    eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
+    eh.restore("./working_dir/map_net/checkpoints/best-283")
 
     #experiment_handler.restore("./results/I/checkpoints/last_n-36")
-    experiment_handler.restore("./working_dir/planner_net_/checkpoints/last_n-21")
+    experiment_handler.restore("./results/I_smaller/checkpoints/last_n-37")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -90,7 +95,8 @@ def main(args):
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
-                output, last_ddy = model(data, training=True)
+                map_fv = tf.stop_gradient(mapae.encode(data[3]))
+                output, last_ddy = model(data, map_fv, training=True)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 #total_loss = tf.reduce_mean(model_loss)  # + reg_loss

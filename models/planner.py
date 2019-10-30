@@ -102,20 +102,19 @@ class FeatureExtractorLayer(tf.keras.Model):
         return x
 
 
-class CorrectionLayer(tf.keras.Model):
-    """
-    Feature correction layer
-    """
-
-    def __init__(self, num_features, activation=tf.keras.activations.tanh, kernel_init_std=0.1, bias_init_val=0):
-        super(CorrectionLayer, self).__init__()
-        self.fc = tf.keras.layers.Dense(num_features, activation,
-                                        kernel_initializer=tf.keras.initializers.RandomNormal(0.0, kernel_init_std),
-                                        bias_initializer=tf.keras.initializers.Constant(bias_init_val))
+class MapFeaturesProcessor(tf.keras.Model):
+    def __init__(self, num_features):
+        super(MapFeaturesProcessor, self).__init__()
+        self.features = [
+            tf.keras.layers.Dense(512, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(num_features, tf.keras.activations.tanh),
+        ]
 
     def call(self, inputs, training=None):
         x = inputs
-        x = self.fc(x)
+        for layer in self.features:
+            x = layer(x)
+        # x = self.fc(x)
         return x
 
 
@@ -129,7 +128,8 @@ class PlanningNetworkMP(tf.keras.Model):
         self.num_segments = num_segments - 1
 
         #resnet = tf.keras.applications.resnet50(include_top=False, weights='imagenet')
-        self.map_processing = MapProcessingLayer()
+        #self.map_processing = MapProcessingLayer()
+        self.map_processing = MapFeaturesProcessor(64)
 
         # self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
         self.preprocessing_stage = FeatureExtractorLayer(n, input_shape)
@@ -148,7 +148,7 @@ class PlanningNetworkMP(tf.keras.Model):
         self.ddy_est = EstimatorLayer(tf.identity)
         self.last_ddy_est = EstimatorLayer(tf.identity)
 
-    def call(self, data, training=None):
+    def call(self, data, map_features, training=None):
         p0, pk, free_space, img = data
         x0, y0, th0, ddy0 = tf.unstack(p0, axis=-1)
         xk, yk, thk = tf.unstack(pk, axis=-1)
@@ -157,7 +157,8 @@ class PlanningNetworkMP(tf.keras.Model):
         W = 20.
         H = 20.
 
-        map_features = self.map_processing(img)
+        #map_features = self.map_processing(img)
+        map_features = self.map_processing(tf.layers.flatten(map_features))
 
 
         parameters = []
@@ -172,7 +173,7 @@ class PlanningNetworkMP(tf.keras.Model):
             inputs = tf.stack([x0, y0, th0, last_ddy, xk, yk, thk], -1)
 
             features = self.preprocessing_stage(inputs, training)
-            features = tf.concat([features, tf.layers.flatten(map_features)], -1)
+            features = tf.concat([features, map_features], -1)
 
 
             x = self.x_est(features, training)
@@ -314,7 +315,7 @@ def plan_loss(plan, very_last_ddy, data):
     # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
     loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    # loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
 
     # loss = obstacles_loss #+ overshoot_loss * 1e2
