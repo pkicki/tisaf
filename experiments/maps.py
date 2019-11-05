@@ -71,6 +71,7 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+    experiment_handler.restore("./working_dir/map_net/checkpoints/best-283")
 
     #experiment_handler.restore("./results/I/checkpoints/last_n-36")
 

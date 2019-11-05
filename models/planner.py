@@ -106,7 +106,8 @@ class MapFeaturesProcessor(tf.keras.Model):
     def __init__(self, num_features):
         super(MapFeaturesProcessor, self).__init__()
         self.features = [
-            tf.keras.layers.Dense(512, tf.keras.activations.tanh),
+            #tf.keras.layers.Dense(32, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(32, tf.keras.activations.tanh),
             tf.keras.layers.Dense(num_features, tf.keras.activations.tanh),
         ]
 
@@ -129,6 +130,7 @@ class PlanningNetworkMP(tf.keras.Model):
 
         #resnet = tf.keras.applications.resnet50(include_top=False, weights='imagenet')
         #self.map_processing = MapProcessingLayer()
+        #self.map_processing = MapFeaturesProcessor(64)
         self.map_processing = MapFeaturesProcessor(64)
 
         # self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
@@ -158,7 +160,7 @@ class PlanningNetworkMP(tf.keras.Model):
         H = 20.
 
         #map_features = self.map_processing(img)
-        map_features = self.map_processing(tf.layers.flatten(map_features))
+        map_features = self.map_processing(tf.layers.flatten(free_space))
 
 
         parameters = []
@@ -209,7 +211,7 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
 
 class Poly(tf.keras.Model):
 
-    def __init__(self, num_segments, input_shape):
+    def __init__(self):
         super(Poly, self).__init__()
         self.x = tf.Variable(2.0, trainable=True, name="x1")
         self.y = tf.Variable(0.0, trainable=True, name="y1")
@@ -231,6 +233,8 @@ class Poly(tf.keras.Model):
         self.dy3 = tf.Variable(-0.1, trainable=True, name="dy4")
         self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
 
+        self.last_ddy = tf.Variable(0.0, trainable=True, name="last_ddy")
+
     def call(self, task, training=None):
         n = 1
         p = tf.stack([self.x, self.y, self.dy, self.ddy], -1)[tf.newaxis, :, tf.newaxis]
@@ -242,7 +246,7 @@ class Poly(tf.keras.Model):
         p3 = tf.stack([self.x3, self.y3, self.dy3, self.ddy3], -1)[tf.newaxis, :, tf.newaxis]
         p3 = tf.tile(p3, [n, 1, 1])
         p = tf.concat([p, p1, p2, p3], -1)
-        return p
+        return p, self.last_ddy
 
 
 def plan_loss(plan, very_last_ddy, data):
@@ -308,12 +312,14 @@ def plan_loss(plan, very_last_ddy, data):
 
     lengths = tf.stack(lengths, -1)
     non_balanced_loss = tf.reduce_sum(
-        tf.abs(lengths - length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32)), -1)
+        tf.nn.relu(lengths - 1.5 * length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32)), -1)
+    non_balanced_loss += tf.reduce_sum(
+        tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
 
-    # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
-    loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
@@ -337,10 +343,10 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
         for j in range(4):
             fs = free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    # plt.xlim(0.0, 15.0)
-    # plt.ylim(0.0, 15.0)
-    plt.xlim(-15.0, 20.0)
-    plt.ylim(0.0, 35.0)
+    plt.xlim(-25.0, 25.0)
+    plt.ylim(0.0, 50.0)
+    #plt.xlim(-15.0, 20.0)
+    #plt.ylim(0.0, 35.0)
     if print:
         plt.show()
     else:
@@ -364,7 +370,7 @@ def process_segment(plan, xL, yL, thL, last_ddy, free_space):
 
     # calculate violations
     curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - Car.max_curvature) * segments, -1)
-    # curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - env.max_curvature), -1)
+    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - Car.max_curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, free_space)
