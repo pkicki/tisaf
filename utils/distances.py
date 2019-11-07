@@ -31,7 +31,7 @@ def point2edge(verts, query_points):
     inside = tf.logical_or(tf.reduce_all(cross > 0, -1), tf.reduce_all(cross < 0, -1))
     inside = tf.reduce_any(inside, -1)
     t = tf.reduce_sum(edge_vector * edge_vector, -1)
-    w = p / t
+    w = p / (t + 1e-8)
     w = tf.where(w <= 0, 1e10 * tf.ones_like(w), w)  # ignore points outside of edge
     w = tf.where(w >= 1, 1e10 * tf.ones_like(w), w)  # ignore points outside of edge
     p = edge_vector * tf.expand_dims(w, -1) \

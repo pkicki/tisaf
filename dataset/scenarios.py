@@ -33,6 +33,8 @@ def get_map(path):
     return tf.cast(tf.stack(rects, 0), tf.float32)
 
 
+
+
 def planning_dataset(path):
     def parse_function(p0, pk, free_space, img_path):
         map_img = tf.image.decode_png(img_path, 1)
@@ -51,8 +53,16 @@ def planning_dataset(path):
         map_path = os.path.join(path, map_path)
         return get_map(map_path)
 
+    def pad_map(map, n):
+        rest = n - map.shape[0]
+        map = tf.pad(map, [[0, rest], [0, 0], [0, 0]])
+        return map
+
     scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".scn")]
     maps = [read_map(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
+    n = np.max([m.shape[0] for m in maps])
+    n = 3
+    maps = [pad_map(m, n) for m in maps]
     imgs = [path + f for f in sorted(os.listdir(path)) if f.endswith(".png")]
     #for i, m in enumerate(maps):
     #    if not m.shape == (2, 4, 2):

@@ -166,13 +166,7 @@ class PlanningNetworkMP(tf.keras.Model):
         parameters = []
         features = None
         for i in range(self.num_segments):
-            x0 /= W
-            xk /= W
-            y0 /= H
-            yk /= H
-            th0 /= 2 * pi
-            thk /= 2 * pi
-            inputs = tf.stack([x0, y0, th0, last_ddy, xk, yk, thk], -1)
+            inputs = tf.stack([x0 / W, y0 / H, th0 / (2 * pi), last_ddy, xk / W, yk / H, thk / (2 * pi)], -1)
 
             features = self.preprocessing_stage(inputs, training)
             features = tf.concat([features, map_features], -1)
@@ -207,46 +201,6 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
     x_glob, y_glob, th_glob, curvature = _calculate_global_xyth_and_curvature(p, x, xL, yL, thL)
 
     return x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
-
-
-class Poly(tf.keras.Model):
-
-    def __init__(self):
-        super(Poly, self).__init__()
-        self.x = tf.Variable(2.0, trainable=True, name="x1")
-        self.y = tf.Variable(0.0, trainable=True, name="y1")
-        self.dy = tf.Variable(0.0, trainable=True, name="dy1")
-        self.ddy = tf.Variable(0.0, trainable=True, name="ddy1")
-
-        self.x1 = tf.Variable(2.0, trainable=True, name="x2")
-        self.y1 = tf.Variable(0.0, trainable=True, name="y2")
-        self.dy1 = tf.Variable(-0.1, trainable=True, name="dy2")
-        self.ddy1 = tf.Variable(0.0, trainable=True, name="ddy2")
-
-        self.x2 = tf.Variable(2.0, trainable=True, name="x3")
-        self.y2 = tf.Variable(0.0, trainable=True, name="y3")
-        self.dy2 = tf.Variable(-0.1, trainable=True, name="dy3")
-        self.ddy2 = tf.Variable(0.0, trainable=True, name="ddy3")
-
-        self.x3 = tf.Variable(2.0, trainable=True, name="x4")
-        self.y3 = tf.Variable(0.0, trainable=True, name="y4")
-        self.dy3 = tf.Variable(-0.1, trainable=True, name="dy4")
-        self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
-
-        self.last_ddy = tf.Variable(0.0, trainable=True, name="last_ddy")
-
-    def call(self, task, training=None):
-        n = 1
-        p = tf.stack([self.x, self.y, self.dy, self.ddy], -1)[tf.newaxis, :, tf.newaxis]
-        p = tf.tile(p, [n, 1, 1])
-        p1 = tf.stack([self.x1, self.y1, self.dy1, self.ddy1], -1)[tf.newaxis, :, tf.newaxis]
-        p1 = tf.tile(p1, [n, 1, 1])
-        p2 = tf.stack([self.x2, self.y2, self.dy2, self.ddy2], -1)[tf.newaxis, :, tf.newaxis]
-        p2 = tf.tile(p2, [n, 1, 1])
-        p3 = tf.stack([self.x3, self.y3, self.dy3, self.ddy3], -1)[tf.newaxis, :, tf.newaxis]
-        p3 = tf.tile(p3, [n, 1, 1])
-        p = tf.concat([p, p1, p2, p3], -1)
-        return p, self.last_ddy
 
 
 def plan_loss(plan, very_last_ddy, data):
