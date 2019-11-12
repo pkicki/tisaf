@@ -18,7 +18,7 @@ class MapProcessingLayer(tf.keras.Model):
         super(MapProcessingLayer, self).__init__()
         self.convs = [
             tf.keras.layers.Conv2D(32, 3, padding='same', activation=tf.keras.activations.relu),
-            tf.keras.layers.Conv2D(64, 3, strides=(2, 2),  padding='same', activation=tf.keras.activations.relu),
+            tf.keras.layers.Conv2D(64, 3, strides=(2, 2), padding='same', activation=tf.keras.activations.relu),
             tf.keras.layers.Conv2D(64, 3, padding='same', activation=tf.keras.activations.relu),
             tf.keras.layers.Conv2D(128, 3, strides=(2, 2), padding='same', activation=tf.keras.activations.relu),
             tf.keras.layers.Conv2D(128, 3, padding='same', activation=tf.keras.activations.relu),
@@ -107,15 +107,19 @@ class MapFeaturesProcessor(tf.keras.Model):
         super(MapFeaturesProcessor, self).__init__()
         self.features = [
             #tf.keras.layers.Dense(32, tf.keras.activations.tanh),
-            tf.keras.layers.Dense(32, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(64, tf.keras.activations.tanh),
+            #tf.keras.layers.Dense(64, tf.keras.activations.tanh),
             tf.keras.layers.Dense(num_features, tf.keras.activations.tanh),
         ]
 
     def call(self, inputs, training=None):
         x = inputs
+        bs = x.shape[0]
+        n = x.shape[1]
+        x = tf.reshape(x, (bs, n, 8))
         for layer in self.features:
             x = layer(x)
-        # x = self.fc(x)
+        x = tf.reduce_sum(x, 1)
         return x
 
 
@@ -128,9 +132,9 @@ class PlanningNetworkMP(tf.keras.Model):
         # n = 128
         self.num_segments = num_segments - 1
 
-        #resnet = tf.keras.applications.resnet50(include_top=False, weights='imagenet')
-        #self.map_processing = MapProcessingLayer()
-        #self.map_processing = MapFeaturesProcessor(64)
+        # resnet = tf.keras.applications.resnet50(include_top=False, weights='imagenet')
+        # self.map_processing = MapProcessingLayer()
+        # self.map_processing = MapFeaturesProcessor(64)
         self.map_processing = MapFeaturesProcessor(64)
 
         # self.preprocessing_stage = FeatureExtractorLayer(n, input_shape, kernel_init_std=0.1)
@@ -159,9 +163,10 @@ class PlanningNetworkMP(tf.keras.Model):
         W = 20.
         H = 20.
 
-        #map_features = self.map_processing(img)
-        map_features = self.map_processing(tf.layers.flatten(free_space))
-
+        # map_features = self.map_processing(img)
+        #map_features = self.map_processing(tf.layers.flatten(free_space))
+        #map_features = tf.stop_gradient(self.map_processing(free_space))
+        map_features = self.map_processing(free_space)
 
         parameters = []
         features = None
@@ -170,7 +175,6 @@ class PlanningNetworkMP(tf.keras.Model):
 
             features = self.preprocessing_stage(inputs, training)
             features = tf.concat([features, map_features], -1)
-
 
             x = self.x_est(features, training)
             y = self.y_est(features, training)
@@ -273,7 +277,7 @@ def plan_loss(plan, very_last_ddy, data):
     # loss = 1e-1 * curvature_loss + obstacles_loss
 
     loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
-    #loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
+    # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
@@ -299,8 +303,8 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
     plt.xlim(-25.0, 25.0)
     plt.ylim(0.0, 50.0)
-    #plt.xlim(-15.0, 20.0)
-    #plt.ylim(0.0, 35.0)
+    # plt.xlim(-15.0, 20.0)
+    # plt.ylim(0.0, 35.0)
     if print:
         plt.show()
     else:
@@ -324,7 +328,7 @@ def process_segment(plan, xL, yL, thL, last_ddy, free_space):
 
     # calculate violations
     curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - Car.max_curvature) * segments, -1)
-    #curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - Car.max_curvature), -1)
+    # curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature) - Car.max_curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.abs(curvature), -1)
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, free_space)
