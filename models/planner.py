@@ -105,6 +105,11 @@ class FeatureExtractorLayer(tf.keras.Model):
 class MapFeaturesProcessor(tf.keras.Model):
     def __init__(self, num_features):
         super(MapFeaturesProcessor, self).__init__()
+        self.vector_processor = [
+            tf.keras.layers.Dense(16, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(32, tf.keras.activations.tanh),
+        ]
+
         self.features = [
             #tf.keras.layers.Dense(32, tf.keras.activations.tanh),
             tf.keras.layers.Dense(64, tf.keras.activations.tanh),
@@ -114,12 +119,17 @@ class MapFeaturesProcessor(tf.keras.Model):
 
     def call(self, inputs, training=None):
         x = inputs
+        shifted = tf.concat([x[:, :, 1:], x[:, :, :1]], -2)
+        x = tf.concat([x, shifted], -1)
+        for layer in self.vector_processor:
+            x = layer(x)
+        x = tf.reduce_sum(x, -2)
         #bs = x.shape[0]
         #n = x.shape[1]
         #x = tf.reshape(x, (bs, n, 8))
         for layer in self.features:
             x = layer(x)
-        #x = tf.reduce_sum(x, 1)
+        x = tf.reduce_sum(x, 1)
         return x
 
 
@@ -163,9 +173,9 @@ class PlanningNetworkMP(tf.keras.Model):
         W = 20.
         H = 20.
 
-        map_features = self.map_processing(tf.layers.flatten(map_features))
+        #map_features = self.map_processing(tf.layers.flatten(map_features))
         #map_features = self.map_processing(tf.layers.flatten(free_space))
-        #map_features = tf.stop_gradient(self.map_processing(free_space))
+        map_features = tf.stop_gradient(self.map_processing(free_space))
         #map_features = self.map_processing(free_space)
 
         parameters = []
