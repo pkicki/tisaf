@@ -114,12 +114,12 @@ class MapFeaturesProcessor(tf.keras.Model):
 
     def call(self, inputs, training=None):
         x = inputs
-        bs = x.shape[0]
-        n = x.shape[1]
-        x = tf.reshape(x, (bs, n, 8))
+        #bs = x.shape[0]
+        #n = x.shape[1]
+        #x = tf.reshape(x, (bs, n, 8))
         for layer in self.features:
             x = layer(x)
-        x = tf.reduce_sum(x, 1)
+        #x = tf.reduce_sum(x, 1)
         return x
 
 
@@ -163,10 +163,10 @@ class PlanningNetworkMP(tf.keras.Model):
         W = 20.
         H = 20.
 
-        # map_features = self.map_processing(img)
+        map_features = self.map_processing(tf.layers.flatten(map_features))
         #map_features = self.map_processing(tf.layers.flatten(free_space))
         #map_features = tf.stop_gradient(self.map_processing(free_space))
-        map_features = self.map_processing(free_space)
+        #map_features = self.map_processing(free_space)
 
         parameters = []
         features = None
@@ -276,10 +276,10 @@ def plan_loss(plan, very_last_ddy, data):
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
 
-    loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    #loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
     # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
 
     # loss = obstacles_loss #+ overshoot_loss * 1e2

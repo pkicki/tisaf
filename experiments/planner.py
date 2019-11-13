@@ -14,6 +14,7 @@ from dataset import scenarios
 from models.planner import plan_loss, _plot, PlanningNetworkMP
 from utils.utils import Environment
 from dataset.scenarios import Task
+from models.maps import MapAE
 
 from argparse import ArgumentParser
 
@@ -55,7 +56,7 @@ def main(args):
     # 2. Define model
     model = PlanningNetworkMP(7, (args.batch_size, 6))
     #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
-    #mapae = MapAE()
+    mapae = MapAE()
 
     # 3. Optimization
 
@@ -72,16 +73,21 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
-    #eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
-    #eh.restore("./working_dir/map_net/checkpoints/best-283")
+    eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
+    eh.restore("./working_dir/map_net/checkpoints/best-283")
 
     #experiment_handler.restore("./results/I/checkpoints/last_n-36")
     #experiment_handler.restore("./results/I_smaller/checkpoints/last_n-37")
     #experiment_handler.restore("./results/I_points/checkpoints/last_n-180")
     #experiment_handler.restore("./results/I_test/checkpoints/last_n-1400")
 
-    experiment_handler.restore("./results/I_tunel/checkpoints/last_n-1715")
+    #experiment_handler.restore("./results/I_tunel/checkpoints/last_n-1715")
+    #experiment_handler.restore("./results/I_tunel_new/checkpoints/last_n-5620")
+    #experiment_handler.restore("./results/I_tunel_map/checkpoints/last_n-1765")
     #experiment_handler.restore("./working_dir/planner_net_save/checkpoints/last_n-2810")
+
+    #experiment_handler.restore("./results/I_mix/checkpoints/last_n-1080")
+    #experiment_handler.restore("./results/I_mix_small/checkpoints/last_n-550")
 
     #experiment_handler.restore("./working_dir/test/checkpoints/last_n-1695")
     #experiment_handler.restore("./working_dir/planner_net_clip/checkpoints/last_n-26370")
@@ -103,8 +109,8 @@ def main(args):
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
-                #map_fv = tf.stop_gradient(mapae.encode(data[3]))
-                output, last_ddy = model(data, None, training=True)
+                map_fv = tf.stop_gradient(mapae.encode(data[3]))
+                output, last_ddy = model(data, map_fv, training=True)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 #total_loss = tf.reduce_mean(model_loss)  # + reg_loss
@@ -113,6 +119,12 @@ def main(args):
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
+            #print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            #[print(g) for g in grads]
+            #for g, tv in zip(grads, model.trainable_variables):
+                #print(tv.name)
+                #print(tf.reduce_mean(tf.abs(g)))
+            #grads = [tf.clip_by_value(g, -10.0, 10.0) for g in grads]
             #grads, _ = tf.clip_by_global_norm(grads, 5.0)
             #g = [tf.reduce_sum(tf.abs(g)) for g in grads]
             #g = tf.reduce_sum(tf.stack(g))
@@ -165,9 +177,13 @@ def main(args):
             # 5.2.1 Make inference of the model for validation and calculate losses
             #output = model(task, training=False)
             #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, task, env)
-            output, last_ddy = model(data, None, training=True)
+            map_fv = tf.stop_gradient(mapae.encode(data[3]))
+            output, last_ddy = model(data, map_fv, training=True)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
                 output, last_ddy, data)
+            #output, last_ddy = model(data, None, training=True)
+            #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
+            #    output, last_ddy, data)
 
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
