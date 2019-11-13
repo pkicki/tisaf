@@ -105,9 +105,10 @@ class FeatureExtractorLayer(tf.keras.Model):
 class MapFeaturesProcessor(tf.keras.Model):
     def __init__(self, num_features):
         super(MapFeaturesProcessor, self).__init__()
-        self.vector_processor = [
-            tf.keras.layers.Dense(16, tf.keras.activations.tanh),
+        self.num_features = 32
+        self.point_processor = [
             tf.keras.layers.Dense(32, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(4*self.num_features, tf.keras.activations.tanh),
         ]
 
         self.features = [
@@ -119,14 +120,15 @@ class MapFeaturesProcessor(tf.keras.Model):
 
     def call(self, inputs, training=None):
         x = inputs
-        shifted = tf.concat([x[:, :, 1:], x[:, :, :1]], -2)
-        x = tf.concat([x, shifted], -1)
-        for layer in self.vector_processor:
+        bs = x.shape[0]
+        n_quad = x.shape[1]
+        n_points = x.shape[2]
+        for layer in self.point_processor:
             x = layer(x)
-        x = tf.reduce_sum(x, -2)
-        #bs = x.shape[0]
-        #n = x.shape[1]
-        #x = tf.reshape(x, (bs, n, 8))
+        x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
+        a, b, c, d = tf.unstack(x, axis=2)
+        mul = a @ b @ c @ d
+        x = tf.trace(mul)
         for layer in self.features:
             x = layer(x)
         x = tf.reduce_sum(x, 1)
@@ -286,10 +288,10 @@ def plan_loss(plan, very_last_ddy, data):
 
     # loss = 1e-1 * curvature_loss + obstacles_loss
 
-    #loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
     # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
 
     # loss = obstacles_loss #+ overshoot_loss * 1e2
