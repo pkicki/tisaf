@@ -108,13 +108,13 @@ class MapFeaturesProcessor(tf.keras.Model):
         self.num_features = 32
         self.point_processor = [
             tf.keras.layers.Dense(32, tf.keras.activations.tanh),
-            tf.keras.layers.Dense(4*self.num_features, tf.keras.activations.tanh),
+            tf.keras.layers.Dense(4 * self.num_features, tf.keras.activations.tanh),
         ]
 
         self.features = [
-            #tf.keras.layers.Dense(32, tf.keras.activations.tanh),
+            # tf.keras.layers.Dense(32, tf.keras.activations.tanh),
             tf.keras.layers.Dense(64, tf.keras.activations.tanh),
-            #tf.keras.layers.Dense(64, tf.keras.activations.tanh),
+            # tf.keras.layers.Dense(64, tf.keras.activations.tanh),
             tf.keras.layers.Dense(num_features, tf.keras.activations.tanh),
         ]
 
@@ -125,10 +125,15 @@ class MapFeaturesProcessor(tf.keras.Model):
         n_points = x.shape[2]
         for layer in self.point_processor:
             x = layer(x)
-        x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
+        #x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
+        x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 4))
         a, b, c, d = tf.unstack(x, axis=2)
-        mul = a @ b @ c @ d
-        x = tf.trace(mul)
+        x = a[:, :, :, 0] + b[:, :, :, 1] + c[:, :, :, 2] + d[:, :, :, 3] \
+          + b[:, :, :, 0] + c[:, :, :, 1] + d[:, :, :, 1] + a[:, :, :, 3] \
+          + c[:, :, :, 0] + d[:, :, :, 1] + a[:, :, :, 1] + b[:, :, :, 3] \
+          + d[:, :, :, 0] + a[:, :, :, 1] + b[:, :, :, 1] + c[:, :, :, 3]
+        #mul = a @ b @ c @ d
+        #x = tf.trace(mul)
         for layer in self.features:
             x = layer(x)
         x = tf.reduce_sum(x, 1)
@@ -175,10 +180,10 @@ class PlanningNetworkMP(tf.keras.Model):
         W = 20.
         H = 20.
 
-        #map_features = self.map_processing(tf.layers.flatten(map_features))
-        #map_features = self.map_processing(tf.layers.flatten(free_space))
-        map_features = tf.stop_gradient(self.map_processing(free_space))
-        #map_features = self.map_processing(free_space)
+        # map_features = self.map_processing(tf.layers.flatten(map_features))
+        # map_features = self.map_processing(tf.layers.flatten(free_space))
+        # map_features = tf.stop_gradient(self.map_processing(free_space))
+        map_features = self.map_processing(free_space)
 
         parameters = []
         features = None
@@ -291,7 +296,7 @@ def plan_loss(plan, very_last_ddy, data):
     loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
     # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
     # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    # loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
 
     # loss = obstacles_loss #+ overshoot_loss * 1e2
