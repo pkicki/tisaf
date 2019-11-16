@@ -125,15 +125,15 @@ class MapFeaturesProcessor(tf.keras.Model):
         n_points = x.shape[2]
         for layer in self.point_processor:
             x = layer(x)
-        #x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
+        # x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
         x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 4))
         a, b, c, d = tf.unstack(x, axis=2)
         x = a[:, :, :, 0] + b[:, :, :, 1] + c[:, :, :, 2] + d[:, :, :, 3] \
-          + b[:, :, :, 0] + c[:, :, :, 1] + d[:, :, :, 1] + a[:, :, :, 3] \
-          + c[:, :, :, 0] + d[:, :, :, 1] + a[:, :, :, 1] + b[:, :, :, 3] \
-          + d[:, :, :, 0] + a[:, :, :, 1] + b[:, :, :, 1] + c[:, :, :, 3]
-        #mul = a @ b @ c @ d
-        #x = tf.trace(mul)
+            + b[:, :, :, 0] + c[:, :, :, 1] + d[:, :, :, 1] + a[:, :, :, 3] \
+            + c[:, :, :, 0] + d[:, :, :, 1] + a[:, :, :, 1] + b[:, :, :, 3] \
+            + d[:, :, :, 0] + a[:, :, :, 1] + b[:, :, :, 1] + c[:, :, :, 3]
+        # mul = a @ b @ c @ d
+        # x = tf.trace(mul)
         for layer in self.features:
             x = layer(x)
         x = tf.reduce_sum(x, 1)
@@ -182,8 +182,8 @@ class PlanningNetworkMP(tf.keras.Model):
 
         # map_features = self.map_processing(tf.layers.flatten(map_features))
         # map_features = self.map_processing(tf.layers.flatten(free_space))
-        # map_features = tf.stop_gradient(self.map_processing(free_space))
-        map_features = self.map_processing(free_space)
+        map_features = tf.stop_gradient(self.map_processing(free_space))
+        # map_features = self.map_processing(free_space)
 
         parameters = []
         features = None
@@ -245,16 +245,11 @@ def plan_loss(plan, very_last_ddy, data):
     MUL = 1.0
     # regular path
     for i in range(num_gpts):
-        # with tf.GradientTape() as tape:
         x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
             process_segment(plan[:, :, i], xL, yL, thL, last_ddy, free_space)
         curvature_loss += curvature_violation * future_mul
         cvs.append(curvature_violation)
         obstacles_loss += invalid * future_mul
-
-        # grad = tape.gradient(curvature_violation, plan[:, :, i])
-        # grad = tape.gradient(curvature_loss, curvature_violation)
-        # print(grad)
 
         length_loss += length
         lengths.append(length)
@@ -272,8 +267,6 @@ def plan_loss(plan, very_last_ddy, data):
     xyL_k = tf.squeeze(Rot(-thk) @ (xyL - xyk)[:, :, tf.newaxis], -1)
     thk_L = (thk - thL)[:, tf.newaxis]
     overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
-    # overshoot_loss = tf.square(tf.nn.relu(xyL_k[:, 0])) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
-    # overshoot_loss = tf.nn.relu(xyL_k[:, 0]) + tf.nn.relu(tf.abs(thk_L) - pi / 2)
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
         process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space)
     curvature_loss += curvature_violation * future_mul
@@ -291,16 +284,12 @@ def plan_loss(plan, very_last_ddy, data):
     non_balanced_loss += tf.reduce_sum(
         tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
-    # loss = 1e-1 * curvature_loss + obstacles_loss
+    # loss for pretraining
+    loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    # loss for training
+    # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
 
-    loss = 1 * curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
-    # loss = 10 * curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2
-    # loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # print(tf.stack(cvs, -1).numpy())
-
-    # loss = obstacles_loss #+ overshoot_loss * 1e2
-    # loss = overshoot_loss * 1e2
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
 
@@ -350,9 +339,7 @@ def process_segment(plan, xL, yL, thL, last_ddy, free_space):
     # curvature_violation = tf.reduce_sum(tf.square(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, free_space)
 
-    return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:,
-                                                                                                        -1]  # thL + tf.atan(
-    # tan_th)
+    return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
 
 def invalidate(x, y, fi, free_space):
