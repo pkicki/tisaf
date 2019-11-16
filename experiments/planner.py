@@ -74,24 +74,9 @@ def main(args):
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
     #eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
+
     #eh.restore("./working_dir/map_net/checkpoints/best-283")
-
     #experiment_handler.restore("./results/I/checkpoints/last_n-36")
-    #experiment_handler.restore("./results/I_smaller/checkpoints/last_n-37")
-    #experiment_handler.restore("./results/I_points/checkpoints/last_n-180")
-    #experiment_handler.restore("./results/I_test/checkpoints/last_n-1400")
-
-    #experiment_handler.restore("./results/I_tunel/checkpoints/last_n-1715")
-    #experiment_handler.restore("./results/I_tunel_new/checkpoints/last_n-5620")
-    #experiment_handler.restore("./results/I_tunel_map/checkpoints/last_n-1765")
-    #experiment_handler.restore("./working_dir/planner_net_save/checkpoints/last_n-2810")
-
-    #experiment_handler.restore("./results/I_mix/checkpoints/last_n-1080")
-    #experiment_handler.restore("./results/I_mix_small/checkpoints/last_n-550")
-
-    #experiment_handler.restore("./working_dir/test/checkpoints/last_n-1695")
-    #experiment_handler.restore("./working_dir/planner_net_clip/checkpoints/last_n-26370")
-    #experiment_handler.restore("./working_dir/planner_net_clip_global/checkpoints/last_n-15210")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -113,22 +98,10 @@ def main(args):
                 output, last_ddy = model(data, None, training=True)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
-                #total_loss = tf.reduce_mean(model_loss)  # + reg_loss
                 total_loss = model_loss
-                #total_loss = tf.reduce_sum(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
-            #print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            #[print(g) for g in grads]
-            #for g, tv in zip(grads, model.trainable_variables):
-                #print(tv.name)
-                #print(tf.reduce_mean(tf.abs(g)))
-            #grads = [tf.clip_by_value(g, -10.0, 10.0) for g in grads]
-            #grads, _ = tf.clip_by_global_norm(grads, 5.0)
-            #g = [tf.reduce_sum(tf.abs(g)) for g in grads]
-            #g = tf.reduce_sum(tf.stack(g))
-            #print(g / 1e7)
 
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
@@ -155,11 +128,6 @@ def main(args):
             train_step += 1
             #if train_step % 20 == 0:
             #    _plot(x_path, y_path, th_path, env, train_step)
-            #print(total_loss)
-            #if (invalid_loss + curvature_loss).numpy().any() > 0:
-            #    print(data[0])
-            #    print(invalid_loss)
-            #    print(curvature_loss)
             _plot(x_path, y_path, th_path, data, train_step)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
@@ -175,15 +143,10 @@ def main(args):
         acc = []
         for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
-            #output = model(task, training=False)
-            #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, task, env)
             #map_fv = tf.stop_gradient(mapae.encode(data[3]))
             output, last_ddy = model(data, None, training=True)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
                 output, last_ddy, data)
-            #output, last_ddy = model(data, None, training=True)
-            #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
-            #    output, last_ddy, data)
 
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
