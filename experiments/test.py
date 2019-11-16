@@ -46,25 +46,29 @@ def main():
     ckpt = tf.train.Checkpoint(optimizer=optimizer,
                                model=model,
                                optimizer_step=tf.train.get_or_create_global_step())
-    path = "./results/tunel_wytrenowany/best-3460"
+    #path = "./results/planner_net_4_trace_inv/checkpoints/best-4869"
+    path = "./results/planner_net_4_trace_inv/checkpoints/last_n-5338"
     ckpt.restore(path)
 
-    N = 20
-    #N = 0
+    #N = 20
+    N = 0
     for i in range(N+1):
 
-        q0 = np.array([5.3644, 1.2775, 1.6512, -0.0910], dtype=np.float32)[np.newaxis]
+        #q0 = np.array([5.3644, 1.2775, 1.6512, -0.0910], dtype=np.float32)[np.newaxis]
+        q0 = np.array([8.7305, 0.9839, 1.6293, -0.0952], dtype=np.float32)[np.newaxis]
         # start position x
-        q0[:, 0] += (i - N/2) * 0.2
+        q0[:, 0] += (i - N/2) * 0.1
         # start orientation
         #q0[:, 2] += (i - N/2) * 2 * pi / 180
-        pk = np.array([4.9934, 23.9864, 1.6065], dtype=np.float32)[np.newaxis]
+        #pk = np.array([4.9934, 23.9864, 1.6065], dtype=np.float32)[np.newaxis]
+        pk = np.array([7.9734, 37.8762, 1.5643], dtype=np.float32)[np.newaxis]
         # end position x
         #pk[:, 0] += (i - N/2) * 0.2
         # end orientation
         #pk[:, 2] += (i - N/2) * 2 * pi / 180
-        quad1 = np.array([[0.00, 0.00], [10.90, 0.00], [10.90, 10.72], [0.00, 10.72]], dtype=np.float32)
-        quad2 = np.array([[2.84, 10.72], [6.74, 10.72], [6.74, 18.08], [2.84, 18.08]], dtype=np.float32)
+        #quad1 = np.array([[0.00, 0.00], [10.90, 0.00], [10.90, 10.72], [0.00, 10.72]], dtype=np.float32)
+        quad1 = np.array([[0.00, 0.00], [16.80, 0.00], [16.80, 15.3], [0.00, 15.3]], dtype=np.float32)
+        quad2 = np.array([[9.51, 15.3], [13.31, 15.3], [13.31, 27.42], [9.51, 27.42]], dtype=np.float32)
         # tunel position
         #W = quad2[1, 0] - quad2[0, 0]
         #L = (10.90 - W) * i / N
@@ -73,7 +77,9 @@ def main():
         #quad2[1, 0] = R
         #quad2[2, 0] = R
         #quad2[3, 0] = L
-        quad3 = np.array([[0.00, 18.08], [10.90, 18.08], [10.90, 28.80], [0.00, 28.80]], dtype=np.float32)
+        #quad3 = np.array([[0.00, 18.08], [10.90, 18.08], [10.90, 28.80], [0.00, 28.80]], dtype=np.float32)
+        #quad3 = np.array([[0.00, 27.42], [16.80, 27.42], [16.80, 42.73], [0.00, 42.73]], dtype=np.float32)
+        quad3 = np.array([[16.80, 27.42], [16.80, 42.73], [0.00, 42.73], [0.00, 27.42]], dtype=np.float32)
         # tunel length
         #T = quad2[2, 1] + (i - N/2) * 0.3
         #quad2[2, 1] = T
@@ -81,19 +87,22 @@ def main():
         #quad3[0, 1] = T
         #quad3[1, 1] = T
 
+        free_space = np.stack([quad3, quad2, quad1], 0)[np.newaxis]
         #free_space = np.stack([quad1, quad2, quad3], 0)[np.newaxis]
-        free_space = np.stack([quad1, quad2, quad3], 0)[np.newaxis]
         img = None
         data = (q0, pk, free_space, img)
 
-        start = time()
+        #start = time()
         output, last_ddy = model(data, None, training=True)
-        #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output,
-                                                                                                                     #last_ddy,
-                                                                                                                     #data)
-        print(time() - start)
-        #print(model_loss)
-        #_plot(x_path, y_path, th_path, data, i)
+        model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output,
+                                                                                                                     last_ddy,
+                                                                                                                     data)
+        #print(time() - start)
+        print(model_loss)
+        print(curvature_loss)
+        print(invalid_loss)
+        print()
+        _plot(x_path, y_path, th_path, data, i)
 
 if __name__ == '__main__':
     main()
