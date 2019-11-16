@@ -7,3 +7,4 @@ class Car:
     rear_axle_to_front = 3.375
     rear_axle_to_back = 0.67
     W = 1.72
+    max_curvature = 1 / 4.5
