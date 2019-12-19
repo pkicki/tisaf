@@ -43,7 +43,7 @@ def _ds(title, ds, ds_size, i, batch_size):
 def main(args):
     # 1. Get datasets
     train_ds, train_size = scenarios.planning_dataset(args.scenario_path)
-    val_ds, val_size = scenarios.planning_dataset(args.scenario_path)
+    val_ds, val_size = scenarios.planning_dataset(args.scenario_path.replace("train", "val"))
 
     #train_ds = train_ds \
     #    .batch(args.batch_size) \
