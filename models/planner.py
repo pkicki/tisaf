@@ -128,10 +128,10 @@ class MapFeaturesProcessor(tf.keras.Model):
         # x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 2, 2))
         x = tf.reshape(x, (bs, n_quad, n_points, self.num_features, 4))
         a, b, c, d = tf.unstack(x, axis=2)
-        x = a[:, :, :, 0] + b[:, :, :, 1] + c[:, :, :, 2] + d[:, :, :, 3] \
-            + b[:, :, :, 0] + c[:, :, :, 1] + d[:, :, :, 1] + a[:, :, :, 3] \
-            + c[:, :, :, 0] + d[:, :, :, 1] + a[:, :, :, 1] + b[:, :, :, 3] \
-            + d[:, :, :, 0] + a[:, :, :, 1] + b[:, :, :, 1] + c[:, :, :, 3]
+        x = a[:, :, :, 0] * b[:, :, :, 1] * c[:, :, :, 2] * d[:, :, :, 3] \
+            + b[:, :, :, 0] * c[:, :, :, 1] * d[:, :, :, 1] * a[:, :, :, 3] \
+            + c[:, :, :, 0] * d[:, :, :, 1] * a[:, :, :, 1] * b[:, :, :, 3] \
+            + d[:, :, :, 0] * a[:, :, :, 1] * b[:, :, :, 1] * c[:, :, :, 3]
         # mul = a @ b @ c @ d
         # x = tf.trace(mul)
         for layer in self.features:
@@ -285,9 +285,9 @@ def plan_loss(plan, very_last_ddy, data):
         tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
     # loss for pretraining
-    loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
-    # loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
 
     # print(tf.stack(cvs, -1).numpy())
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
