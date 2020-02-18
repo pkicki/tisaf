@@ -172,8 +172,9 @@ class PlanningNetworkMP(tf.keras.Model):
         self.last_ddy_est = EstimatorLayer(tf.identity)
 
     def call(self, data, map_features, training=None):
-        p0, pk, free_space, img = data
-        x0, y0, th0, ddy0 = tf.unstack(p0, axis=-1)
+        p0, pk, free_space = data
+        x0, y0, th0 = tf.unstack(p0, axis=-1)
+        ddy0 = tf.zeros_like(x0)
         xk, yk, thk = tf.unstack(pk, axis=-1)
 
         last_ddy = ddy0
@@ -182,8 +183,9 @@ class PlanningNetworkMP(tf.keras.Model):
 
         # map_features = self.map_processing(tf.layers.flatten(map_features))
         # map_features = self.map_processing(tf.layers.flatten(free_space))
-        map_features = tf.stop_gradient(self.map_processing(free_space))
         # map_features = self.map_processing(free_space)
+
+        #map_features = tf.stop_gradient(self.map_processing(free_space))
 
         parameters = []
         features = None
@@ -191,7 +193,7 @@ class PlanningNetworkMP(tf.keras.Model):
             inputs = tf.stack([x0 / W, y0 / H, th0 / (2 * pi), last_ddy, xk / W, yk / H, thk / (2 * pi)], -1)
 
             features = self.preprocessing_stage(inputs, training)
-            features = tf.concat([features, map_features], -1)
+            #features = tf.concat([features, map_features], -1)
 
             x = self.x_est(features, training)
             y = self.y_est(features, training)
@@ -226,8 +228,9 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
 
 def plan_loss(plan, very_last_ddy, data):
     num_gpts = plan.shape[-1]
-    p0, pk, free_space, img = data
-    x0, y0, th0, ddy0 = tf.unstack(p0, axis=-1)
+    p0, pk, free_space = data
+    x0, y0, th0 = tf.unstack(p0, axis=-1)
+    ddy0 = tf.zeros_like(x0)
     xk, yk, thk = tf.unstack(pk, axis=-1)
     xL = x0
     yL = y0
@@ -287,14 +290,16 @@ def plan_loss(plan, very_last_ddy, data):
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
-    loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
+    fine_loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss + length_loss
+    loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
-    # print(tf.stack(cvs, -1).numpy())
+    print(tf.stack(cvs, -1).numpy())
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
 
 def _plot(x_path, y_path, th_path, data, step, print=False):
-    _, _, free_space, _ = data
+    _, _, free_space = data
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
@@ -307,10 +312,12 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
         for j in range(4):
             fs = free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    plt.xlim(-25.0, 25.0)
-    plt.ylim(0.0, 50.0)
+    #plt.xlim(-25.0, 25.0)
+    #plt.ylim(0.0, 50.0)
     # plt.xlim(-15.0, 20.0)
     # plt.ylim(0.0, 35.0)
+    plt.xlim(-20.0, 5.0)
+    plt.ylim(-20.0, 5.0)
     if print:
         plt.show()
     else:

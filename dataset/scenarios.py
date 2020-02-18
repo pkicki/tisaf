@@ -1,4 +1,5 @@
 import os
+from random import shuffle
 
 import numpy as np
 import tensorflow as tf
@@ -36,50 +37,26 @@ def get_map(path):
 
 
 def planning_dataset(path):
-    def parse_function(p0, pk, free_space, img_path):
-        map_img = tf.image.decode_png(img_path, 1)
-        map_img = tf.image.resize(map_img, (200, 200))
-        map_img = tf.cast(tf.concat([tf.equal(map_img, 0), tf.not_equal(map_img, 0)], -1), tf.float32)
-        return p0, pk, free_space, map_img
-
     def read_scn(scn_path):
         scn_path = os.path.join(path, scn_path)
-        data = np.loadtxt(scn_path, delimiter='\t', dtype=np.float32)
-        p0 = tf.unstack(data[0][:4], axis=0)
-        pk = tf.unstack(data[-1][:3], axis=0)
-        return p0, pk
-
-    def read_map(map_path):
-        map_path = os.path.join(path, map_path)
-        return get_map(map_path)
-
-    def pad_map(map, n):
-        rest = n - map.shape[0]
-        map = tf.pad(map, [[0, rest], [0, 0], [0, 0]])
-        return map
+        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        map = tf.transpose(tf.reshape(data, (3, 2, 4)), (0, 2, 1))
+        res_path = os.path.join(path, scn_path.replace("scn", "res"))
+        data = np.loadtxt(res_path, delimiter=' ', dtype=np.float32)
+        data = tf.concat([data[:, 1:], data[:, :1]], -1)
+        p0 = tf.unstack(data, axis=0)
+        pk = np.zeros(3)
+        return p0, pk, map
 
     scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".scn")]
-    maps = [read_map(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
-    n = np.max([m.shape[0] for m in maps])
-    n = 3
-    maps = [pad_map(m, n) for m in maps]
-    imgs = [path + f for f in sorted(os.listdir(path)) if f.endswith(".png")]
-    #for i, m in enumerate(maps):
-    #    if not m.shape == (2, 4, 2):
-    #        print("ZUO")
-    #        print(m)
-    #        print(sorted([f for f in os.listdir(path) if f.endswith(".map")])[i])
 
     def gen():
         for i in range(len(scenarios)):
-            map_img = Image.open(imgs[i])
-            map_img = map_img.resize((256, 256))
-            map_img = np.asarray(map_img)
-            #map_img = mpimg.imread(imgs[i])
-            map_img = tf.cast(tf.stack([tf.equal(map_img, 0), tf.not_equal(map_img, 0)], -1), tf.float32)
-            yield scenarios[i][0], scenarios[i][1], maps[i], map_img
+            shuffle(scenarios[i][0])
+            for p0 in scenarios[i][0]:
+                yield p0, scenarios[i][1], scenarios[i][2]
 
-    ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.float32, tf.float32, tf.float32)) \
+    ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.float32, tf.float32)) \
         .shuffle(buffer_size=len(scenarios), reshuffle_each_iteration=True)
         #.map(parse_function, 8) \
 
@@ -98,8 +75,8 @@ def planning_tensor(path):
 
 
 def load_map(path):
-    map_path = os.path.join(path, "map.map")
-    free_space = get_map(map_path)
+    data = np.loadtxt(path, delimiter=' ', dtype=np.float32)
+    free_space = tf.transpose(tf.reshape(data, (3, 2, 4)), (0, 2, 1))
     return free_space
 
 
