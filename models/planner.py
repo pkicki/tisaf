@@ -307,10 +307,10 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
         for j in range(4):
             fs = free_space
             plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    plt.xlim(-25.0, 25.0)
-    plt.ylim(0.0, 50.0)
-    # plt.xlim(-15.0, 20.0)
-    # plt.ylim(0.0, 35.0)
+    #plt.xlim(-25.0, 25.0)
+    #plt.ylim(0.0, 50.0)
+    plt.xlim(-15.0, 20.0)
+    plt.ylim(0.0, 35.0)
     if print:
         plt.show()
     else:
