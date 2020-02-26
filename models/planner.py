@@ -183,7 +183,7 @@ class PlanningNetworkMP(tf.keras.Model):
 
         # map_features = self.map_processing(tf.layers.flatten(map_features))
         # map_features = self.map_processing(tf.layers.flatten(free_space))
-        # map_features = self.map_processing(free_space)
+        map_features = self.map_processing(free_space)
 
         #map_features = tf.stop_gradient(self.map_processing(free_space))
 
@@ -193,7 +193,7 @@ class PlanningNetworkMP(tf.keras.Model):
             inputs = tf.stack([x0 / W, y0 / H, th0 / (2 * pi), last_ddy, xk / W, yk / H, thk / (2 * pi)], -1)
 
             features = self.preprocessing_stage(inputs, training)
-            #features = tf.concat([features, map_features], -1)
+            features = tf.concat([features, map_features], -1)
 
             x = self.x_est(features, training)
             y = self.y_est(features, training)
@@ -294,7 +294,7 @@ def plan_loss(plan, very_last_ddy, data):
     fine_loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
-    print(tf.stack(cvs, -1).numpy())
+    #print(tf.stack(cvs, -1).numpy())
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
 
@@ -316,8 +316,8 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
     #plt.ylim(0.0, 50.0)
     # plt.xlim(-15.0, 20.0)
     # plt.ylim(0.0, 35.0)
-    plt.xlim(-20.0, 5.0)
-    plt.ylim(-20.0, 5.0)
+    #plt.xlim(-35.0, 5.0)
+    #plt.ylim(-2.0, 6.0)
     if print:
         plt.show()
     else:
