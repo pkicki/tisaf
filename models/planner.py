@@ -259,7 +259,9 @@ def plan_loss(plan, very_last_ddy, data):
         x_path.append(x_glob)
         y_path.append(y_glob)
         th_path.append(th_glob)
-        last_ddy = plan[:, 3, i]
+        dth = tf.atan(plan[:, 2, i])
+        m = tf.cos(dth)**3
+        last_ddy = plan[:, 3, i] * m
         future_mul *= MUL
 
     # finishing segment
@@ -290,8 +292,8 @@ def plan_loss(plan, very_last_ddy, data):
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
-    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss
-    fine_loss = curvature_loss + obstacles_loss + overshoot_loss * 1e2 + non_balanced_loss + length_loss
+    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss
+    fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
     #print(tf.stack(cvs, -1).numpy())

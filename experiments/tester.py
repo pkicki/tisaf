@@ -1,6 +1,8 @@
 import inspect
 import os
 import sys
+from time import time
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -13,7 +15,7 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP
+from models.planner_test import plan_loss, _plot, PlanningNetworkMP
 from utils.utils import Environment
 from dataset.scenarios import Task
 from models.maps import MapAE
@@ -30,119 +32,84 @@ tf.enable_eager_execution()
 tf.set_random_seed(444)
 
 
-def _plot(x_path, y_path, th_path, data, step, print=False):
-    _, _, free_space = data
-    for i in range(len(x_path)):
-        for k in [2]:#range(len(x_path[i])):
-            x = x_path[i][k]
-            y = y_path[i][k]
-            #plt.plot(x, y)
-            th = th_path[i][k]
-            cp = calculate_car_crucial_points(x, y, th)
-            for p in cp:
-                plt.plot(p[:, 0], p[:, 1])
-
-    for i in range(free_space.shape[1]):
-        for j in range(4):
-            fs = free_space
-            plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
-    # plt.xlim(-25.0, 25.0)
-    # plt.ylim(0.0, 50.0)
-    # plt.xlim(-15.0, 20.0)
-    # plt.ylim(0.0, 35.0)
-    # plt.xlim(-35.0, 5.0)
-    # plt.ylim(-2.0, 6.0)
-    if print:
-        plt.show()
-    else:
-        plt.savefig("last_path" + str(step).zfill(6) + ".png")
-        plt.clf()
-
-
-def main(args):
+def main():
     # 1. Get datasets
-    train_ds = scenarios.planning(args.scenario_path)
-    val_ds = scenarios.planning(args.scenario_path.replace("train", "val"))
+    ds = scenarios.planning_test("../../TG_data/test")
+    #ds = scenarios.planning_test("../../TG_data/test2")
 
     # 2. Define model
-    model = PlanningNetworkMP(7, (args.batch_size, 6))
+    model = PlanningNetworkMP(7, (1, 6))
 
     # 3. Optimization
 
-    optimizer = tf.train.AdamOptimizer(args.eta)
+    optimizer = tf.train.AdamOptimizer(1)
     l2_reg = tf.keras.regularizers.l2(1e-5)
 
     # 4. Restore, Log & Save
-    experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+    experiment_handler = ExperimentHandler(".", "", 1, model, optimizer)
 
-    experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    #experiment_handler.restore("./monster/planner_net_mix/checkpoints/best-6527")
+    experiment_handler.restore("./monster/last_mix/checkpoints/best-7274")
 
-    # 5. Run everything
-    train_step, val_step = 0, 0
-    best_accuracy = 0.0
-
-    # 5.1. Training Loop
-    #acc = []
-    #for i in range(len(train_ds)):
-    #    p0, pk, map = train_ds[i]
-    #    bs = p0.shape[0]
-    #    map = tf.tile(map[tf.newaxis], (bs, 1, 1, 1))
-    #    data = (p0, pk, map)
-    #    # 5.1.1. Make inference of the model, calculate losses and record gradients
-    #
-    #    output, last_ddy = model(data, None, training=True)
-    #    model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
-
-
-    #    # 5.1.3 Calculate statistics
-    #    acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
-
-    #    # 5.1.5 Update meta variables
-    #    train_step += 1
-    #epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
-    #print(epoch_accuracy)
-
-    #    accuracy.result()
-
-    # 5.2. Validation Loop
     acc = []
-    #for i in range(len(val_ds)):
-    for i in [1]:
-        p0, pk, map = val_ds[i]
+    t = []
+    t_sl = []
+    t_rrt = []
+    l = []
+    l_rrt = []
+    for i in range(len(ds)):#range(1):
+        p0, pk, map, rrt, sl = ds[i]
         bs = p0.shape[0]
-        map = tf.tile(map[tf.newaxis], (bs, 1, 1, 1))
-        data = (p0, pk, map)
+        for j in range(bs):
+            data = (p0[tf.newaxis, j], pk[tf.newaxis, j], map[tf.newaxis])
+        #map = tf.tile(map[tf.newaxis], (len(p0), 1, 1, 1))
+        #data = (p0, pk, map)
         # 5.2.1 Make inference of the model for validation and calculate losses
-        output, last_ddy = model(data, None, training=True)
-        model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
-            output, last_ddy, data)
+            start = time()
+            output, last_ddy = model(data, None, training=True)
+            end = time()
+            rt = end - start
+            model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path, length = plan_loss(
+                output, last_ddy, data)
 
-        for i in range(bs):
-            print(i, invalid_loss[i])
+            dl = (tf.reduce_sum(length, -1) / sl[j, -1])[0]
+            dl_rrt = (1.5 * rrt[j, -1] / sl[j, -1])
+            _plot(x_path, y_path, th_path, data, i)
+            #print(i, j)
+            #print(invalid_loss)
+            #print(curvature_loss)
+            #print(dl)
+            #print(rt)
+            #print()
 
-        _plot(x_path, y_path, th_path, data, 0, True)
-        #_plot(x_path, y_path, th_path, data, 0, True)
+            l.append(dl)
+            l_rrt.append(dl_rrt)
+            t.append(rt)
+            t_sl.append(sl[j, 0])
+            t_rrt.append(rrt[j, 0])
+            acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss + overshoot_loss, 0.0), tf.float32)[0])
 
-        acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
+    t = np.array(t)
+    t = np.extract(t > 0, t)
+    t_sl = np.array(t_sl)
+    acc_sl = np.mean((t_sl > 0).astype(np.float32))
+    t_sl = np.extract(t_sl > 0, t_sl)
+    t_rrt = np.array(t_rrt)
+    acc_rrt = np.mean((t_rrt > 0).astype(np.float32))
+    t_rrt = np.extract(t_rrt > 0, t_rrt)
+    l = np.array(l)
+    l = np.extract(l > 0, l)
+    l_rrt = np.array(l_rrt)
+    l_rrt = np.extract(l_rrt > 0, l_rrt)
+    epoch_accuracy = tf.reduce_mean(tf.stack(acc, -1))
+    print("ACC:", epoch_accuracy)
+    print("T:", np.mean(t[1:]), np.std(t[1:]))
+    print("T_RRT:", np.mean(t_rrt[1:]), np.std(t_rrt[1:]))
+    print("T_SL:", np.mean(t_sl[1:]), np.std(t_sl[1:]))
+    print("L:", np.mean(l), np.std(l))
+    print("L_RRT:", np.mean(l_rrt), np.std(l_rrt))
+    print("ACC_RRT:", acc_rrt)
+    print("ACC_SL:", acc_sl)
 
-    epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
-    print(epoch_accuracy)
-
-
-
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('--config-file', action=LoadFromFile, type=open)
-    parser.add_argument('--scenario-path', type=str)
-    parser.add_argument('--working-path', type=str, default='./working_dir')
-    parser.add_argument('--num-epochs', type=int)
-    parser.add_argument('--batch-size', type=int)
-    parser.add_argument('--log-interval', type=int, default=5)
-    parser.add_argument('--out-name', type=str)
-    parser.add_argument('--eta', type=float, default=5e-4)
-    parser.add_argument('--train-beta', type=float, default=0.99)
-    parser.add_argument('--augment', action='store_true', default=False)
-    parser.add_argument('--width', type=int, default=640)
-    parser.add_argument('--height', type=int, default=480)
-    args, _ = parser.parse_known_args()
-    main(args)
+main()

@@ -2,6 +2,7 @@ import inspect
 import os
 import sys
 import numpy as np
+from experiments.accessible_set_train import _plot_car
 from matplotlib import pyplot as plt
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -33,6 +34,10 @@ tf.set_random_seed(444)
 def _plot(x_path, y_path, th_path, data, step, print=False):
     _, _, free_space = data
     for k in range(len(x_path[0])):
+        plt.figure(num=None, figsize=(9, 2), dpi=300, facecolor='w', edgecolor='k')
+        plt.fill([-100., 100., 100., -100., -100.], [-100., -100., 100., 100., -100.], 'brown', zorder=1)
+        plt.xlim(-33., 4.5)
+        plt.ylim(-0.25, 5.75)
         for i in range(len(x_path)):
             x = x_path[i][k]
             y = y_path[i][k]
@@ -42,19 +47,28 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
             for p in cp:
                 plt.plot(p[:, 0], p[:, 1])
 
-        for i in range(free_space.shape[1]):
-            for j in range(4):
-                fs = free_space
-                plt.plot([fs[k, i, j - 1, 0], fs[k, i, j, 0]], [fs[k, i, j - 1, 1], fs[k, i, j, 1]])
-    # plt.xlim(-25.0, 25.0)
-    # plt.ylim(0.0, 50.0)
-    # plt.xlim(-15.0, 20.0)
-    # plt.ylim(0.0, 35.0)
-    # plt.xlim(-35.0, 5.0)
-    # plt.ylim(-2.0, 6.0)
+        m = free_space[k]
+        seq = [(0, 0), (0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 2), (2, 3), (2, 0), (2, 1), (1, 0), (1, 1), (0, 0)]
+        x = [m[s][0] for s in seq]
+        y = [m[s][1] for s in seq]
+        plt.fill(x, y, 'w', zorder=2)
+
+        i = len(x_path) - 1
+        x = x_path[i][k]
+        y = y_path[i][k]
+        th = th_path[i][k]
+        cp = calculate_car_crucial_points(x, y, th)[1:]
+        _plot_car(cp, -1, 'r')
+        i = 0
+        x = x_path[i][k]
+        y = y_path[i][k]
+        th = th_path[i][k]
+        cp = calculate_car_crucial_points(x, y, th)[1:]
+        _plot_car(cp, 0, 'g')
         if print:
             plt.show()
         else:
+            #plt.savefig("last_path" + str(k).zfill(6) + ".pdf")
             plt.savefig("last_path" + str(k).zfill(6) + ".png")
             plt.clf()
 
@@ -107,9 +121,9 @@ def main(args):
     map[:, 0, 0, 0] = map[:, 0, 3, 0]
     map[:, 1, 1, 0] = map[:, 0, 0, 0]
     map[:, 1, 2, 0] = map[:, 0, 0, 0]
-    p0 = np.array([[-30., 1.5, 0.]], dtype=np.float32)
+    p0 = np.array([[-27., 1.5, 0.]], dtype=np.float32)
     p0 = np.tile(p0, (n + 1, 1))
-    pk = np.array([[0., 1.5, 0.]], dtype=np.float32)
+    pk = np.array([[-3., 1.5, 0.]], dtype=np.float32)
     pk = np.tile(pk, (n + 1, 1))
     for i in [1]:
         data = (p0, pk, map)

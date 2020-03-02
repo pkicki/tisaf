@@ -83,8 +83,36 @@ def planning(path):
 
     scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
 
+    print(sorted(os.listdir(path)))
     return scenarios
 
+
+def planning_test(path):
+    def read_scn(scn_path):
+        scn_path = os.path.join(path, scn_path)
+        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        map = tf.reshape(data, (3, 4, 2))
+        res_path = scn_path[:-7] + "scenarios.scn"
+        data = np.loadtxt(res_path, delimiter=' ', dtype=np.float32)
+        data = tf.reshape(data, (-1, 2, 3))
+        data = tf.concat([data[:, :, 1:], data[:, :, :1]], axis=-1)
+        p0, pk = tf.unstack(data, axis=1)
+        rrt_path = scn_path[:-7] + "rrt.txt"
+        rrt = np.loadtxt(rrt_path, delimiter=' ', dtype=np.float32)
+        sl_path = scn_path[:-7] + "sl.txt"
+        sl = np.loadtxt(sl_path, delimiter=' ', dtype=np.float32)
+        #map = tf.tile(map[tf.newaxis], (len(p0), 1, 1, 1))
+        return p0, pk, map, rrt, sl
+
+    scenarios = []
+    for e in sorted(os.listdir(path)):
+        for f in os.listdir(os.path.join(path, e)):
+            for g in os.listdir(os.path.join(path, e, f)):
+                if g.endswith("map"):
+                    g = os.path.join(path, e, f, g)
+                    scenarios.append(read_scn(g))
+
+    return scenarios
 
 def planning_tensor(path):
     def parse_function(scn_path):

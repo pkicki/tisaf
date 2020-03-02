@@ -86,7 +86,10 @@ def main(args):
     #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
     #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
     #experiment_handler.restore("./working_dir/last_n-10987")
-    experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
+    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
+
+    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
 
     # 5. Run everything
     train_step, val_step = 0, 0
