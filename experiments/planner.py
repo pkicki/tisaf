@@ -60,6 +60,10 @@ def main(args):
         args.train_beta)
     eta.assign(eta_f())
     optimizer = tf.train.AdamOptimizer(eta)
+<<<<<<< HEAD
+=======
+    l2_reg = tf.keras.regularizers.l2(1e-5)
+>>>>>>> 563e74c... IROS models
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
@@ -115,7 +119,10 @@ def main(args):
         with tfc.summary.always_record_summaries():
             tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 563e74c... IROS models
         # 5.2. Validation Loop
         experiment_handler.log_validation()
         acc = []
@@ -167,9 +174,5 @@ if __name__ == '__main__':
     parser.add_argument('--log-interval', type=int, default=5)
     parser.add_argument('--out-name', type=str)
     parser.add_argument('--eta', type=float, default=5e-4)
-    parser.add_argument('--train-beta', type=float, default=0.99)
-    parser.add_argument('--augment', action='store_true', default=False)
-    parser.add_argument('--width', type=int, default=640)
-    parser.add_argument('--height', type=int, default=480)
     args, _ = parser.parse_known_args()
     main(args)
