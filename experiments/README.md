@@ -5,3 +5,5 @@
 * `planner.py` - a script for training the model
 * `tester.py` - a script for testing the model (on the test set)
 * `tester_val.py` - a script for testing the model on the (train/validation datasets)
+* `monster/` - contains trained models used in the experiments
+* `config_files/` - contains configuration files used for running the models
