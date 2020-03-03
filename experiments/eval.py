@@ -14,7 +14,7 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly, PlanningNetwork
+from models.planner import plan_loss, _plot, PlanningNetworkMP
 from utils.utils import Environment
 from dataset.scenarios import Task, load_map
 
@@ -44,11 +44,11 @@ def _ds(title, ds, ds_size, i, batch_size):
 
 def main(args):
     # 1. Get datasets
-    free_space = load_map(args.scenario_path)
+    free_space = load_map(args.scenario_path + "/map2.scn")
     env = Environment(free_space, 1. / 4.5)
 
     # 2. Define model
-    model = PlanningNetworkMP(7, (args.batch_size, 6))
+    model = PlanningNetworkMP(4, (args.batch_size, 6))
 
     # 3. Optimization
 
@@ -63,38 +63,43 @@ def main(args):
     #experiment_handler.restore("./results/test_generalizacji/3_biggernet/checkpoints/last_n-2525")
     #experiment_handler.restore("./results/test_generalizacji/3_supervised/checkpoints/last_n-823")
     #experiment_handler.restore("./results/test_generalizacji/3_supervised_slower/checkpoints/last_n-331")
-    experiment_handler.restore("./working_dir/planner_net_/checkpoints/last_n-700")
+    #experiment_handler.restore("./working_dir/planner_net_/checkpoints/last_n-700")
+    experiment_handler.restore("./working_dir/planner_net_4/checkpoints/best-8664")
 
 
     # 5. Run everything
     xn = 30
     yn = 30
     thn = 1
+    free_space = tf.tile(free_space[tf.newaxis], (xn*yn*thn, 1, 1, 1))
     #x = tf.linspace(2.5, 2.7, xn)[:, tf.newaxis, tf.newaxis]
-    x = tf.linspace(2.3, 2.9, xn)[:, tf.newaxis, tf.newaxis]
+    x = tf.linspace(-16., -5., xn)[:, tf.newaxis, tf.newaxis]
     #y = tf.linspace(2.0, 2.15, yn)[tf.newaxis, :, tf.newaxis]
-    y = tf.linspace(1.8, 2.6, yn)[tf.newaxis, :, tf.newaxis]
+    y = tf.linspace(-17., -10., yn)[tf.newaxis, :, tf.newaxis]
     #th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] + pi / 2
-    th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] + 1.57#pi / 2
+    th = tf.linspace(0.0, 0.0, thn)[tf.newaxis, tf.newaxis, :] #+ 1.57#pi / 2
     x = tf.tile(x, [1, yn, thn])
     y = tf.tile(y, [xn, 1, thn])
     th = tf.tile(th, [xn, yn, 1])
     p0 = tf.stack([x, y, th], -1)
-    p0 = tf.reshape(p0, (xn*yn*thn, 1, 3))
-    xk = 7.5 * tf.ones_like(x)
-    yk = 12. * tf.ones_like(x)
+    p0 = tf.reshape(p0, (xn*yn*thn, 3))
+    xk = 0. * tf.ones_like(x)
+    yk = 0. * tf.ones_like(x)
     thk = 0. * tf.ones_like(x)
     pk = tf.stack([xk, yk, thk], -1)
-    pk = tf.reshape(pk, (xn*yn*thn, 1, 3))
-    data = tf.concat([p0, pk], 1)
-    output, last_ddy = model(data, training=True)
-    model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data, env)
-    print(model_loss)
-    color = tf.equal(model_loss, 0.0)
+    pk = tf.reshape(pk, (xn*yn*thn, 3))
+    data = (p0, pk, free_space)
+    output, last_ddy = model(data, None, training=True)
+    model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
+    print(invalid_loss + curvature_loss + overshoot_loss)
+    color = tf.equal(invalid_loss + curvature_loss + overshoot_loss, 0.0)
     print(x)
     print(y)
     plt.scatter(tf.reshape(x, [-1]), tf.reshape(y, [-1]), c=color)
-    plt.plot([2.5, 2.7, 2.6], [2.0, 2.0, 2.15], 'r*')
+    for i in range(free_space.shape[1]):
+        for j in range(4):
+            fs = free_space
+            plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
     plt.show()
 
 
