@@ -85,7 +85,11 @@ def main(args):
 
     #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
     #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
-    experiment_handler.restore("./working_dir/last_n-10987")
+    #experiment_handler.restore("./working_dir/last_n-10987")
+    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
+
+    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -101,7 +105,6 @@ def main(args):
         experiment_handler.log_training()
         acc = []
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
-            print(i)
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
                 #map_fv = tf.stop_gradient(mapae.encode(data[3]))
@@ -136,9 +139,9 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            #if train_step % 20 == 0:
-            #    _plot(x_path, y_path, th_path, env, train_step)
-            _plot(x_path, y_path, th_path, data, train_step, True)
+            if train_step % 20 == 0:
+                _plot(x_path, y_path, th_path, data, train_step)
+            #_plot(x_path, y_path, th_path, data, train_step, True)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch

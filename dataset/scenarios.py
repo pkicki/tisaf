@@ -40,28 +40,79 @@ def planning_dataset(path):
     def read_scn(scn_path):
         scn_path = os.path.join(path, scn_path)
         data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
-        map = tf.transpose(tf.reshape(data, (3, 2, 4)), (0, 2, 1))
-        res_path = os.path.join(path, scn_path.replace("scn", "res"))
+        map = tf.reshape(data, (3, 4, 2))
+        res_path = scn_path[:-3] + "scn"
         data = np.loadtxt(res_path, delimiter=' ', dtype=np.float32)
-        data = tf.concat([data[:, 1:], data[:, :1]], -1)
-        p0 = tf.unstack(data, axis=0)
-        pk = np.zeros(3)
+        data = tf.reshape(data, (-1, 2, 3))
+        data = tf.concat([data[:, :, 1:], data[:, :, :1]], axis=-1)
+        p0, pk = tf.unstack(data, axis=1)
         return p0, pk, map
 
-    scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".scn")]
+    scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
 
-    def gen():
-        for i in range(len(scenarios)):
-            shuffle(scenarios[i][0])
-            for p0 in scenarios[i][0]:
-                yield p0, scenarios[i][1], scenarios[i][2]
+    maps = []
+    p0 = []
+    pk = []
+    g = list(range(len(scenarios)))
+    shuffle(g)
+    for i in g:
+        s = list(range(len(scenarios[i][0])))
+        shuffle(s)
+        for k in s:
+            p0.append(scenarios[i][0][k])
+            pk.append(scenarios[i][1][k])
+            maps.append(scenarios[i][2])
 
-    ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.float32, tf.float32)) \
-        .shuffle(buffer_size=len(scenarios), reshuffle_each_iteration=True)
-        #.map(parse_function, 8) \
+    ds = tf.data.Dataset.from_tensor_slices((p0, pk, maps)) \
+        .shuffle(buffer_size=len(maps), reshuffle_each_iteration=True)
 
-    return ds, len(scenarios)
+    return ds, len(maps)
 
+
+def planning(path):
+    def read_scn(scn_path):
+        scn_path = os.path.join(path, scn_path)
+        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        map = tf.reshape(data, (3, 4, 2))
+        res_path = scn_path[:-3] + "scn"
+        data = np.loadtxt(res_path, delimiter=' ', dtype=np.float32)
+        data = tf.reshape(data, (-1, 2, 3))
+        data = tf.concat([data[:, :, 1:], data[:, :, :1]], axis=-1)
+        p0, pk = tf.unstack(data, axis=1)
+        return p0, pk, map
+
+    scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
+
+    print(sorted(os.listdir(path)))
+    return scenarios
+
+
+def planning_test(path):
+    def read_scn(scn_path):
+        scn_path = os.path.join(path, scn_path)
+        data = np.loadtxt(scn_path, delimiter=' ', dtype=np.float32)
+        map = tf.reshape(data, (3, 4, 2))
+        res_path = scn_path[:-7] + "scenarios.scn"
+        data = np.loadtxt(res_path, delimiter=' ', dtype=np.float32)
+        data = tf.reshape(data, (-1, 2, 3))
+        data = tf.concat([data[:, :, 1:], data[:, :, :1]], axis=-1)
+        p0, pk = tf.unstack(data, axis=1)
+        rrt_path = scn_path[:-7] + "rrt.txt"
+        rrt = np.loadtxt(rrt_path, delimiter=' ', dtype=np.float32)
+        sl_path = scn_path[:-7] + "sl.txt"
+        sl = np.loadtxt(sl_path, delimiter=' ', dtype=np.float32)
+        #map = tf.tile(map[tf.newaxis], (len(p0), 1, 1, 1))
+        return p0, pk, map, rrt, sl
+
+    scenarios = []
+    for e in sorted(os.listdir(path)):
+        for f in os.listdir(os.path.join(path, e)):
+            for g in os.listdir(os.path.join(path, e, f)):
+                if g.endswith("map"):
+                    g = os.path.join(path, e, f, g)
+                    scenarios.append(read_scn(g))
+
+    return scenarios
 
 def planning_tensor(path):
     def parse_function(scn_path):
