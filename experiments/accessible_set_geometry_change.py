@@ -22,7 +22,7 @@ from argparse import ArgumentParser
 
 import tensorflow as tf
 
-from dl_work.utils import ExperimentHandler, LoadFromFile
+from utils.execution import ExperimentHandler, LoadFromFile
 
 tf.enable_eager_execution()
 #tf.set_random_seed(444)
@@ -194,9 +194,5 @@ if __name__ == '__main__':
     parser.add_argument('--log-interval', type=int, default=5)
     parser.add_argument('--out-name', type=str)
     parser.add_argument('--eta', type=float, default=5e-4)
-    parser.add_argument('--train-beta', type=float, default=0.99)
-    parser.add_argument('--augment', action='store_true', default=False)
-    parser.add_argument('--width', type=int, default=640)
-    parser.add_argument('--height', type=int, default=480)
     args, _ = parser.parse_known_args()
     main(args)

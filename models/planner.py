@@ -310,6 +310,7 @@ def invalidate(x, y, fi, free_space):
 
 def _calculate_global_xyth_and_curvature(params, x, xL, yL, thL):
     x_local_sequence = tf.expand_dims(x, -1)
+    #x_local_sequence *= tf.linspace(0.0, 1.0, 64)
     x_local_sequence *= tf.linspace(0.0, 1.0, 128)
     curv, dX, dY = curvature(params, x_local_sequence)
 

@@ -16,7 +16,7 @@ from dataset import scenarios
 from models.planner_test import plan_loss, _plot, PlanningNetworkMP
 
 import tensorflow as tf
-from dl_work.utils import ExperimentHandler
+from utils.execution import ExperimentHandler
 
 tf.enable_eager_execution()
 tf.set_random_seed(444)
@@ -32,7 +32,6 @@ def main():
     # 3. Optimization
 
     optimizer = tf.train.AdamOptimizer(1)
-    l2_reg = tf.keras.regularizers.l2(1e-5)
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(".", "", 1, model, optimizer)
