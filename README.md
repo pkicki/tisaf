@@ -42,3 +42,14 @@ python planner.py --config-file ./config_files/XXX.conf
 5. Uncomment loss in models/planner.py for training
 6. Run training with the config_file you like
 
+### Citation
+```
+@misc{kicki2020neuralplanning,
+    title={A Self-Supervised Learning Approach to Rapid Path Planning for Car-Like Vehicles Maneuvering in Urban Environment},
+    author={Piotr Kicki and Tomasz Gawron and Piotr Skrzypczyński},
+    year={2020},
+    eprint={2003.00946},
+    archivePrefix={arXiv},
+    primaryClass={cs.RO}
+}
+```
