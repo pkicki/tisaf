@@ -2,6 +2,7 @@ import inspect
 import os
 import sys
 import numpy as np
+from matplotlib import pyplot as plt
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -55,6 +56,7 @@ def main(args):
 
     # 2. Define model
     model = PlanningNetworkMP(7, (args.batch_size, 6))
+    #model = PlanningNetworkMP(4, (args.batch_size, 6))
     #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
     #mapae = MapAE()
 
@@ -77,6 +79,17 @@ def main(args):
 
     #eh.restore("./working_dir/map_net/checkpoints/best-283")
     #experiment_handler.restore("./results/I/checkpoints/last_n-36")
+    #experiment_handler.restore("./results/I_mix_small_new/checkpoints/last_n-339")
+    #experiment_handler.restore("./results/I_parkowanie/checkpoints/last_n-549")
+    #experiment_handler.restore("./results/I_tunel/checkpoints/last_n-549")
+
+    #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
+    #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
+    #experiment_handler.restore("./working_dir/last_n-10987")
+    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
+
+    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -126,9 +139,9 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            #if train_step % 20 == 0:
-            #    _plot(x_path, y_path, th_path, env, train_step)
-            _plot(x_path, y_path, th_path, data, train_step)
+            if train_step % 20 == 0:
+                _plot(x_path, y_path, th_path, data, train_step)
+            #_plot(x_path, y_path, th_path, data, train_step, True)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch

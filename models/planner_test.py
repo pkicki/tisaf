@@ -1,4 +1,5 @@
 from math import pi
+from time import time
 
 import tensorflow as tf
 
@@ -6,7 +7,7 @@ from dataset.scenarios import decode_data
 from utils.constants import Car
 from utils.crucial_points import calculate_car_crucial_points
 from utils.distances import dist, integral
-from utils.poly5 import curvature, params
+from utils.poly5 import curvature, params, DY
 from utils.utils import _calculate_length, Rot
 from matplotlib import pyplot as plt
 
@@ -202,7 +203,9 @@ class PlanningNetworkMP(tf.keras.Model):
             p = tf.concat([x, y, dy, ddy], -1)
             parameters.append(p)
 
+            #start = time()
             x0, y0, th0 = calculate_next_point(p, x0, y0, th0, last_ddy)
+            #print(time() - start)
             last_ddy = ddy[:, 0]
 
         parameters = tf.stack(parameters, -1)
@@ -218,10 +221,12 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
 
     # calculate params
     zeros = tf.zeros_like(last_ddy)
+    #start = time()
     p = params([zeros, zeros, zeros, last_ddy], tf.unstack(plan, axis=1))
+    #print(time()-start)
 
     # calculate xy coords of segment
-    x_glob, y_glob, th_glob, curvature = _calculate_global_xyth_and_curvature(p, x, xL, yL, thL)
+    x_glob, y_glob, th_glob = _calculate_global_xyth(p, x, xL, yL, thL)
 
     return x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
@@ -259,9 +264,7 @@ def plan_loss(plan, very_last_ddy, data):
         x_path.append(x_glob)
         y_path.append(y_glob)
         th_path.append(th_glob)
-        dth = tf.atan(plan[:, 2, i])
-        m = tf.cos(dth)**3
-        last_ddy = plan[:, 3, i] * m
+        last_ddy = plan[:, 3, i]
         future_mul *= MUL
 
     # finishing segment
@@ -296,8 +299,8 @@ def plan_loss(plan, very_last_ddy, data):
     fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
-    # print(tf.stack(cvs, -1).numpy())
-    return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
+    #print(tf.stack(cvs, -1).numpy())
+    return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path, lengths
 
 
 def _plot(x_path, y_path, th_path, data, step, print=False):
@@ -371,7 +374,7 @@ def invalidate(x, y, fi, free_space):
 def _calculate_global_xyth_and_curvature(params, x, xL, yL, thL):
     x_local_sequence = tf.expand_dims(x, -1)
     x_local_sequence *= tf.linspace(0.0, 1.0, 128)
-    # x_local_sequence *= tf.linspace(0.0, 1.0, 512)
+    #x_local_sequence *= tf.linspace(0.0, 1.0, 512)
     curv, dX, dY = curvature(params, x_local_sequence)
 
     X = tf.stack([x_local_sequence ** 5, x_local_sequence ** 4, x_local_sequence ** 3, x_local_sequence ** 2,
@@ -385,3 +388,18 @@ def _calculate_global_xyth_and_curvature(params, x, xL, yL, thL):
 
     th_glob = thL[:, tf.newaxis] + tf.atan(dY)
     return x_glob, y_glob, th_glob, curv
+
+
+def _calculate_global_xyth(params, x, xL, yL, thL):
+    x_local_sequence = tf.expand_dims(x, -1)
+    dY = DY(params, x_local_sequence)
+
+    X = tf.stack([x_local_sequence ** 5, x_local_sequence ** 4, x_local_sequence ** 3, x_local_sequence ** 2,
+                  x_local_sequence, tf.ones_like(x_local_sequence)], -1)
+    y_local_sequence = tf.squeeze(X @ params, -1)
+    R = Rot(thL)
+    xy_glob = R @ tf.stack([x_local_sequence, y_local_sequence], 1)
+    xy_glob += tf.expand_dims(tf.stack([xL, yL], -1), -1)
+
+    th_glob = thL[:, tf.newaxis] + tf.atan(dY)
+    return xy_glob[:, 0], xy_glob[:, 1], th_glob
