@@ -43,19 +43,12 @@ def main(args):
     train_ds, train_size = scenarios.planning_dataset(args.scenario_path)
     val_ds, val_size = scenarios.planning_dataset(args.scenario_path.replace("train", "val"))
 
-    #train_ds = train_ds \
-    #    .batch(args.batch_size) \
-    #    .prefetch(args.batch_size)
-
     val_ds = val_ds \
         .batch(args.batch_size) \
         .prefetch(args.batch_size)
 
     # 2. Define model
     model = PlanningNetworkMP(7, (args.batch_size, 6))
-    #model = PlanningNetworkMP(4, (args.batch_size, 6))
-    #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
-    #mapae = MapAE()
 
     # 3. Optimization
 
@@ -67,26 +60,9 @@ def main(args):
         args.train_beta)
     eta.assign(eta_f())
     optimizer = tf.train.AdamOptimizer(eta)
-    #optimizer = tf.train.GradientDescentOptimizer(eta)
-    l2_reg = tf.keras.regularizers.l2(1e-5)
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
-    #eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
-
-    #eh.restore("./working_dir/map_net/checkpoints/best-283")
-    #experiment_handler.restore("./results/I/checkpoints/last_n-36")
-    #experiment_handler.restore("./results/I_mix_small_new/checkpoints/last_n-339")
-    #experiment_handler.restore("./results/I_parkowanie/checkpoints/last_n-549")
-    #experiment_handler.restore("./results/I_tunel/checkpoints/last_n-549")
-
-    #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
-    #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
-    #experiment_handler.restore("./working_dir/last_n-10987")
-    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
-
-    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
-    experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -95,19 +71,15 @@ def main(args):
         # workaround for tf problems with shuffling
         dataset_epoch = train_ds.shuffle(train_size)
         dataset_epoch = dataset_epoch.batch(args.batch_size).prefetch(args.batch_size)
-        #dataset_epoch = train_ds
 
         # 5.1. Training Loop
-        accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
         experiment_handler.log_training()
         acc = []
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
-                #map_fv = tf.stop_gradient(mapae.encode(data[3]))
                 output, last_ddy = model(data, None, training=True)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
-                #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
                 total_loss = model_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
@@ -128,7 +100,6 @@ def main(args):
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
                 tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
                 tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
-                #tfc.summary.scalar('metrics/reg_loss', reg_loss, step=train_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=train_step)
                 tfc.summary.scalar('training/eta', eta, step=train_step)
@@ -138,22 +109,18 @@ def main(args):
             train_step += 1
             if train_step % 20 == 0:
                 _plot(x_path, y_path, th_path, data, train_step)
-            #_plot(x_path, y_path, th_path, data, train_step, True)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
         with tfc.summary.always_record_summaries():
             tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
-        #    accuracy.result()
 
         # 5.2. Validation Loop
-        # accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
         experiment_handler.log_validation()
         acc = []
         for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
-            #map_fv = tf.stop_gradient(mapae.encode(data[3]))
             output, last_ddy = model(data, None, training=True)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
                 output, last_ddy, data)
@@ -161,11 +128,6 @@ def main(args):
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
             acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
-
-            # 5.1.2 Calculate statistics
-            # prediction = tf.argmax(output, -1, output_type=tf.int32)
-            # accuracy(prediction, labels)
-            # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
 
             # 5.2.3 Print logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):

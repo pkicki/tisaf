@@ -82,7 +82,7 @@ def main(args):
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
 
-    experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
+    experiment_handler.restore("./monster/last_mix/checkpoints/best-7274")
 
     # 5.2. Validation Loop
     #for i in range(len(val_ds)):

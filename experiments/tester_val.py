@@ -37,8 +37,6 @@ def main():
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(".", "", 1, model, optimizer)
 
-    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
-    #experiment_handler.restore("./monster/planner_net_mix/checkpoints/best-6527")
     experiment_handler.restore("./monster/last_mix/checkpoints/best-7274")
 
     acc = []
