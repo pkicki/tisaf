@@ -12,7 +12,8 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP, init_loss
+#from models.planner import plan_loss, _plot, PlanningNetworkMP
+from models.dubbins import plan_loss, _plot, PlanningNetworkMP
 from utils.utils import Environment
 from dataset.scenarios import Task
 from models.maps import MapAE
@@ -56,6 +57,7 @@ def main(args):
 
     # 2. Define model
     model = PlanningNetworkMP(7, (args.batch_size, 6))
+    #model = PlanningNetworkMP(4, (args.batch_size, 6))
     #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
     #mapae = MapAE()
 
@@ -85,14 +87,6 @@ def main(args):
     #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
     #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
     #experiment_handler.restore("./working_dir/last_n-10987")
-    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
-
-    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
-    #experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
-
-    #experiment_handler.restore("./working_dir/pretrained_6ep_init_overshoot/checkpoints/last_n-9")
-    #experiment_handler.restore("./working_dir/mix3_1e-5_1/checkpoints/last_n-29")
-    experiment_handler.restore("./working_dir/mix3_1e-5_2/checkpoints/last_n-429")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -108,16 +102,13 @@ def main(args):
         experiment_handler.log_training()
         acc = []
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
+            print(i)
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
                 #map_fv = tf.stop_gradient(mapae.encode(data[3]))
-                output, last_ddy = model(data, None, training=True)
-                loss = init_loss(output, last_ddy, data)
-                #loss = 0.0
-                model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
+                output = model(data, None, training=True)
+                model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, data)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
-                #total_loss = overshoot_loss + curvature_loss + non_balanced_loss
-                #total_loss = loss + overshoot_loss + curvature_loss + non_balanced_loss#model_loss
                 total_loss = model_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
@@ -133,7 +124,6 @@ def main(args):
 
             # 5.1.4 Save logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
-                tfc.summary.scalar('metrics/init_loss', loss, step=train_step)
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
@@ -147,9 +137,9 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 20 == 0:
-                _plot(x_path, y_path, th_path, data, train_step)
-            #_plot(x_path, y_path, th_path, data, train_step, True)
+            #if train_step % 20 == 0:
+            #    _plot(x_path, y_path, th_path, env, train_step)
+            _plot(x_path, y_path, th_path, data, train_step, True)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
@@ -165,9 +155,9 @@ def main(args):
         for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
             #map_fv = tf.stop_gradient(mapae.encode(data[3]))
-            output, last_ddy = model(data, None, training=True)
+            output = model(data, None, training=True)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
-                output, last_ddy, data)
+                output, data)
 
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))

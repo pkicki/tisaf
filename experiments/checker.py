@@ -2,7 +2,6 @@ import inspect
 import os
 import sys
 import numpy as np
-from matplotlib import pyplot as plt
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -12,10 +11,9 @@ sys.path.insert(0, parentdir)
 
 # add parent (root) to pythonpath
 from dataset import scenarios
-from models.planner import plan_loss, _plot, PlanningNetworkMP, init_loss
+from models.planner import plan_loss, _plot, PlanningNetworkMP, Poly
 from utils.utils import Environment
 from dataset.scenarios import Task
-from models.maps import MapAE
 
 from argparse import ArgumentParser
 
@@ -44,7 +42,7 @@ def _ds(title, ds, ds_size, i, batch_size):
 def main(args):
     # 1. Get datasets
     train_ds, train_size = scenarios.planning_dataset(args.scenario_path)
-    val_ds, val_size = scenarios.planning_dataset(args.scenario_path.replace("train", "val"))
+    val_ds, val_size = scenarios.planning_dataset(args.scenario_path)
 
     #train_ds = train_ds \
     #    .batch(args.batch_size) \
@@ -55,7 +53,8 @@ def main(args):
         .prefetch(args.batch_size)
 
     # 2. Define model
-    model = PlanningNetworkMP(7, (args.batch_size, 6))
+    #model = PlanningNetworkMP(7, (args.batch_size, 6))
+    model = Poly()
     #encoder = MapEncoder("./working_dir/map_net/checkpoints/best-283")
     #mapae = MapAE()
 
@@ -74,25 +73,6 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
-    #eh = ExperimentHandler(args.working_path, args.out_name, args.log_interval, mapae, optimizer)
-
-    #eh.restore("./working_dir/map_net/checkpoints/best-283")
-    #experiment_handler.restore("./results/I/checkpoints/last_n-36")
-    #experiment_handler.restore("./results/I_mix_small_new/checkpoints/last_n-339")
-    #experiment_handler.restore("./results/I_parkowanie/checkpoints/last_n-549")
-    #experiment_handler.restore("./results/I_tunel/checkpoints/last_n-549")
-
-    #experiment_handler.restore("./working_dir/pretrained_7/checkpoints/last_n-1279")
-    #experiment_handler.restore("./working_dir/pretrained_4/checkpoints/last_n-423")
-    #experiment_handler.restore("./working_dir/last_n-10987")
-    #experiment_handler.restore("./working_dir/pnmt2/checkpoints/best-5315")
-
-    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
-    #experiment_handler.restore("./working_dir/mix3/checkpoints/best-6874")
-
-    #experiment_handler.restore("./working_dir/pretrained_6ep_init_overshoot/checkpoints/last_n-9")
-    #experiment_handler.restore("./working_dir/mix3_1e-5_1/checkpoints/last_n-29")
-    experiment_handler.restore("./working_dir/mix3_1e-5_2/checkpoints/last_n-429")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -110,19 +90,15 @@ def main(args):
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
-                #map_fv = tf.stop_gradient(mapae.encode(data[3]))
-                output, last_ddy = model(data, None, training=True)
-                loss = init_loss(output, last_ddy, data)
-                #loss = 0.0
+                output, last_ddy = model(None)
                 model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
                 #reg_loss = tfc.layers.apply_regularization(l2_reg, model.trainable_variables)
-                #total_loss = overshoot_loss + curvature_loss + non_balanced_loss
-                #total_loss = loss + overshoot_loss + curvature_loss + non_balanced_loss#model_loss
+                #total_loss = tf.reduce_mean(model_loss)  # + reg_loss
                 total_loss = model_loss
+                #total_loss = tf.reduce_sum(model_loss)  # + reg_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
-
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
@@ -133,7 +109,6 @@ def main(args):
 
             # 5.1.4 Save logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
-                tfc.summary.scalar('metrics/init_loss', loss, step=train_step)
                 tfc.summary.scalar('metrics/model_loss', model_loss, step=train_step)
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
@@ -147,9 +122,10 @@ def main(args):
             # 5.1.5 Update meta variables
             eta.assign(eta_f())
             train_step += 1
-            if train_step % 20 == 0:
-                _plot(x_path, y_path, th_path, data, train_step)
-            #_plot(x_path, y_path, th_path, data, train_step, True)
+            #if train_step % 20 == 0:
+            #    _plot(x_path, y_path, th_path, env, train_step)
+            #print(total_loss)
+            _plot(x_path, y_path, th_path, data, train_step)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
@@ -160,47 +136,48 @@ def main(args):
 
         # 5.2. Validation Loop
         # accuracy = tfc.eager.metrics.Accuracy('metrics/accuracy')
-        experiment_handler.log_validation()
-        acc = []
-        for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
-            # 5.2.1 Make inference of the model for validation and calculate losses
-            #map_fv = tf.stop_gradient(mapae.encode(data[3]))
-            output, last_ddy = model(data, None, training=True)
-            model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
-                output, last_ddy, data)
+        #experiment_handler.log_validation()
+        #acc = []
+        #for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
+        #    # 5.2.1 Make inference of the model for validation and calculate losses
+        #    #output = model(task, training=False)
+        #    #model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, task, env)
+        #    output, last_ddy = model(data, training=False)
+        #    model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
+        #        output, last_ddy, data, env)
 
-            t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
-            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
-            acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
+        #    t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
+        #    s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
+        #    acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
 
-            # 5.1.2 Calculate statistics
-            # prediction = tf.argmax(output, -1, output_type=tf.int32)
-            # accuracy(prediction, labels)
-            # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
+        #    # 5.1.2 Calculate statistics
+        #    # prediction = tf.argmax(output, -1, output_type=tf.int32)
+        #    # accuracy(prediction, labels)
+        #    # batch_accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, labels), tf.float32))
 
-            # 5.2.3 Print logs for particular interval
-            with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
-                tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
-                tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
-                tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
-                tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
-                tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=val_step)
-                tfc.summary.scalar('metrics/really_good_paths', s, step=val_step)
-                tfc.summary.scalar('metrics/good_paths', t, step=val_step)
+        #    # 5.2.3 Print logs for particular interval
+        #    with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, val_step):
+        #        tfc.summary.scalar('metrics/model_loss', model_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=val_step)
+        #        tfc.summary.scalar('metrics/really_good_paths', s, step=val_step)
+        #        tfc.summary.scalar('metrics/good_paths', t, step=val_step)
 
-            # 5.2.4 Update meta variables
-            val_step += 1
+        #    # 5.2.4 Update meta variables
+        #    val_step += 1
 
-        epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
+        #epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
-        # 5.2.5 Take statistics over epoch
-        with tfc.summary.always_record_summaries():
-            tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
+        ## 5.2.5 Take statistics over epoch
+        #with tfc.summary.always_record_summaries():
+        #    tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
-        # 5.3 Save last and best
-        if epoch_accuracy > best_accuracy:
-            experiment_handler.save_best()
-            best_accuracy = epoch_accuracy
+        ## 5.3 Save last and best
+        #if epoch_accuracy > best_accuracy:
+        #    experiment_handler.save_best()
+        #    best_accuracy = epoch_accuracy
         experiment_handler.save_last()
 
         experiment_handler.flush()
