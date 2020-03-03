@@ -13,9 +13,6 @@ sys.path.insert(0, parentdir)
 # add parent (root) to pythonpath
 from dataset import scenarios
 from models.planner import plan_loss, _plot, PlanningNetworkMP
-from utils.utils import Environment
-from dataset.scenarios import Task
-from models.maps import MapAE
 
 from argparse import ArgumentParser
 

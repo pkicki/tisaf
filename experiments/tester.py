@@ -16,17 +16,10 @@ sys.path.insert(0, parentdir)
 # add parent (root) to pythonpath
 from dataset import scenarios
 from models.planner_test import plan_loss, _plot, PlanningNetworkMP
-from utils.utils import Environment
-from dataset.scenarios import Task
-from models.maps import MapAE
-
-from argparse import ArgumentParser
 
 import tensorflow as tf
-import tensorflow.contrib as tfc
-from tqdm import tqdm
 
-from dl_work.utils import ExperimentHandler, LoadFromFile
+from dl_work.utils import ExperimentHandler
 
 tf.enable_eager_execution()
 tf.set_random_seed(444)
@@ -34,8 +27,7 @@ tf.set_random_seed(444)
 
 def main():
     # 1. Get datasets
-    ds = scenarios.planning_test("../../TG_data/test")
-    #ds = scenarios.planning_test("../../TG_data/test2")
+    ds = scenarios.planning_test("../data/test")
 
     # 2. Define model
     model = PlanningNetworkMP(7, (1, 6))
@@ -48,8 +40,6 @@ def main():
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(".", "", 1, model, optimizer)
 
-    #experiment_handler.restore("./paper/tunel_prostopadle/checkpoints/best-6691")
-    #experiment_handler.restore("./monster/planner_net_mix/checkpoints/best-6527")
     experiment_handler.restore("./monster/last_mix/checkpoints/best-7274")
 
     acc = []
