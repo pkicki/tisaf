@@ -1,6 +1,8 @@
 import inspect
 import os
 import sys
+from time import time
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -84,17 +86,29 @@ def main(args):
     #w = 3.0
     #q3 = [[-19., y], [-10., y], [-10., y+w], [-19., y+w]]
     #map = np.array([q1, q2, q3], dtype=np.float32)[np.newaxis]
-    n = 20
-    r = 0.1
-    y = 0.8
+
+    a = 40
+    x = np.linspace(-32., -19., a)
+    b = 40
+    y = np.linspace(0., 5.5, b)
+    c = 40
+    th = np.linspace(0., (2 - 1/c) * np.pi, c)
+    X, Y, TH = np.meshgrid(x, y, th)
+    x, y = np.meshgrid(x, y)
+    X = X.flatten()
+    Y = Y.flatten()
+    TH = TH.flatten()
+    p0 = np.stack([X, Y, TH], 1).astype(np.float32)
+    n = a * b * c
+
+    ty = 1.8
     w = 2.7
     map = val_ds[0][2].numpy()[np.newaxis]
-    map = np.tile(map, (n + 1, 1, 1, 1))
-    rng = np.linspace(y, y + r * n, n + 1)
-    map[:, 1, 0, 1] = rng
-    map[:, 1, 1, 1] = rng
-    map[:, 1, 2, 1] = rng + w
-    map[:, 1, 3, 1] = rng + w
+    map = np.tile(map, (n, 1, 1, 1))
+    map[:, 1, 0, 1] = ty
+    map[:, 1, 1, 1] = ty
+    map[:, 1, 2, 1] = ty + w
+    map[:, 1, 3, 1] = ty + w
     map[:, 0, :2, 1] = 0.
     map[:, 0, 2:, 1] = 5.5
     map[:, 2, :2, 1] = 0.
@@ -107,19 +121,32 @@ def main(args):
     map[:, 0, 0, 0] = map[:, 0, 3, 0]
     map[:, 1, 1, 0] = map[:, 0, 0, 0]
     map[:, 1, 2, 0] = map[:, 0, 0, 0]
-    p0 = np.array([[-30., 1.5, 0.]], dtype=np.float32)
-    p0 = np.tile(p0, (n + 1, 1))
     pk = np.array([[0., 1.5, 0.]], dtype=np.float32)
-    pk = np.tile(pk, (n + 1, 1))
+    pk = np.tile(pk, (n, 1))
     for i in [1]:
         data = (p0, pk, map)
         # 5.2.1 Make inference of the model for validation and calculate losses
+        dummy_data = (p0[:1], pk[:1], map[:1])
+        output, last_ddy = model(dummy_data, None, training=True)
+        start = time()
         output, last_ddy = model(data, None, training=True)
+        end = time()
+        print("TIME:", end - start)
         model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
             output, last_ddy, data)
-        print(invalid_loss, curvature_loss)
+        #print(invalid_loss, curvature_loss)
 
-        _plot(x_path, y_path, th_path, data, 0, False)
+        l = invalid_loss + curvature_loss + overshoot_loss
+        l = tf.reshape(l, (-1, c))
+        color = tf.reduce_sum(tf.cast(tf.equal(l, 0.0), tf.float32), -1)
+        plt.scatter(tf.reshape(x, [-1]), tf.reshape(y, [-1]), c=color)
+        plt.colorbar()
+        plt.arrow(pk[0, 0], pk[0, 1], np.cos(pk[0, 2]), np.sin(pk[0, 2]), width=0.1)
+        for i in range(map.shape[1]):
+            for j in range(4):
+                fs = map
+                plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
+        plt.show()
         #_plot(x_path, y_path, th_path, data, 0, True)
 
 
