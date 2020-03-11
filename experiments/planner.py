@@ -52,18 +52,8 @@ def main(args):
 
     # 3. Optimization
 
-    eta = tfc.eager.Variable(args.eta)
-    eta_f = tf.train.exponential_decay(
-        args.eta,
-        tf.train.get_or_create_global_step(),
-        int(float(train_size) / args.batch_size),
-        args.train_beta)
-    eta.assign(eta_f())
-    optimizer = tf.train.AdamOptimizer(eta)
-<<<<<<< HEAD
-=======
+    optimizer = tf.train.AdamOptimizer(args.eta)
     l2_reg = tf.keras.regularizers.l2(1e-5)
->>>>>>> 563e74c... IROS models
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
@@ -119,10 +109,6 @@ def main(args):
         with tfc.summary.always_record_summaries():
             tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 563e74c... IROS models
         # 5.2. Validation Loop
         experiment_handler.log_validation()
         acc = []
