@@ -68,7 +68,7 @@ class Poly(tf.keras.Model):
 
 def main():
     # 2. Define model
-    data = np.loadtxt("../data/train/mix3/0.map", delimiter=' ', dtype=np.float32)
+    data = np.loadtxt("../../TG_data/train/mix3/0.map", delimiter=' ', dtype=np.float32)
     free_space = np.reshape(data, (1, 3, 4, 2))
     free_space[0, 0, 0, 0] = -11.
     free_space[0, 0, 3, 0] = -11.

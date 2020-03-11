@@ -59,7 +59,6 @@ def dist(verts, query_points):
     dists = tf.where(inside, tf.zeros_like(dists), dists)
     return dists
 
-
 import matplotlib.pyplot as plt
 
 
@@ -138,3 +137,80 @@ def integral(free_space, path):
     penetration = tf.reduce_mean(penetration, -1)
 
     return tf.reduce_sum(penetration, -1)
+
+
+def dist_perpendicular(free_space, p):
+    """
+
+    :param free_space: (N, V, 4, 2)
+    :param p: (N, S, P, 2)
+    :return:
+    """
+
+    p = tf.transpose(p, (0, 2, 1, 3))
+    quads_len = free_space.shape[1]
+    p_0 = p[:, :, :-1]
+    p_1 = p[:, :, 1:]
+    pts_len = tf.shape(p_0)[1]
+    seq_len = tf.shape(p_0)[2]
+    p_0_x = p_0[..., 0]
+    p_0_y = p_0[..., 1]
+    p_1_x = p_1[..., 0]
+    p_1_y = p_1[..., 1]
+    A = p_1_y - p_0_y
+    B = p_0_x - p_1_x
+    C = p_1_x * p_0_y - p_0_x * p_1_y
+    s = (p_0 + p_1) / 2
+
+    p = tf.transpose(p, (0, 2, 1, 3))
+    inside = if_inside(free_space, p)
+    inside = tf.transpose(inside, (0, 2, 1))[..., :-1]
+
+    A2_B2 = - B / (A + 1e-10)
+    AB2 = (tf.zeros_like(A), tf.zeros_like(B))
+    AB2 = tf.where((tf.equal(B, 0.0), tf.equal(B, 0.0)), (tf.zeros_like(A), tf.ones_like(B)), AB2)
+    AB2 = tf.where((tf.equal(A, 0.0), tf.equal(A, 0.0)), (tf.ones_like(A), tf.zeros_like(B)), AB2)
+    A_or_B = tf.logical_or(tf.equal(B, 0.0), tf.equal(A, 0.0))
+    AB2 = tf.where((A_or_B, A_or_B), AB2, (A2_B2, tf.ones_like(A)))
+    AB2 = tf.transpose(AB2, (1, 2, 3, 0))
+    C2 = - AB2[..., 0] * s[..., 0] - AB2[..., 1] * s[..., 1]
+
+    AB2 = tf.tile(AB2[:, tf.newaxis, tf.newaxis], (1, quads_len, 4, 1, 1, 1))
+    C2 = tf.tile(C2[:, tf.newaxis, tf.newaxis], (1, quads_len, 4, 1, 1))
+
+    free_space = tf.tile(free_space[:, :, :, tf.newaxis, tf.newaxis], (1, 1, 1, pts_len, seq_len, 1))
+    fs_0 = free_space
+    fs_1 = tf.roll(free_space, 1, axis=2)
+    fs_0_x = fs_0[..., 0]
+    fs_0_y = fs_0[..., 1]
+    fs_1_x = fs_1[..., 0]
+    fs_1_y = fs_1[..., 1]
+    fs_A = fs_1_y - fs_0_y
+    fs_B = fs_0_x - fs_1_x
+    fs_AB = tf.stack([fs_A, fs_B], -1)
+    fs_C = fs_1_x * fs_0_y - fs_0_x * fs_1_y
+
+    Cs = tf.stack([C2, fs_C], -1)
+    M = tf.stack([AB2, fs_AB], -2)
+    pp = tf.linalg.solve(M + tf.eye(2, dtype=tf.float32)[tf.newaxis] * 1e-10, -Cs[..., tf.newaxis])
+    pp = pp[..., 0]
+
+    # CHECK IF BETWEEN ENDS OF SEGMENT
+    edge = fs_1 - fs_0
+    pp_in_fs_0 = pp - fs_0
+
+    g = tf.reduce_sum(edge * pp_in_fs_0, -1)
+    t = tf.reduce_sum(edge * edge, -1)
+    w = g / (t + 1e-8)
+    w = tf.where(tf.logical_and(w >= 0, w <= 1), tf.ones_like(w),
+                 1e10 * tf.ones_like(w))  # ignore points outside of edge
+
+    pp = pp * w[..., tf.newaxis]
+    dist = tf.linalg.norm(pp - s[:, tf.newaxis, tf.newaxis], axis=-1)
+    dist = tf.reduce_min(dist, 2)  # min from edges
+    dist = tf.reduce_min(dist, 1)  # min from quads
+
+    dist = tf.where(inside, tf.zeros_like(dist), dist)
+    dist = tf.where(tf.greater(dist, 1e5), tf.zeros_like(dist), dist)
+    dist = tf.transpose(dist, (0, 2, 1))
+    return dist

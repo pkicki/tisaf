@@ -5,7 +5,7 @@ import tensorflow as tf
 from dataset.scenarios import decode_data
 from utils.constants import Car
 from utils.crucial_points import calculate_car_crucial_points
-from utils.distances import dist, integral
+from utils.distances import dist, integral, dist_perpendicular
 from utils.poly5 import curvature, params
 from utils.utils import _calculate_length, Rot
 from matplotlib import pyplot as plt
@@ -308,7 +308,7 @@ def plan_loss(plan, very_last_ddy, data):
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
-    coarse_loss = curvature_loss + obstacles_loss + 1e2 * overshoot_loss + non_balanced_loss
+    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss
     fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
@@ -375,9 +375,9 @@ def invalidate(x, y, fi, free_space):
     crucial_points = tf.stack(crucial_points, -2)
 
     d = tf.sqrt(tf.reduce_sum((crucial_points[:, 1:] - crucial_points[:, :-1]) ** 2, -1))
-    penetration = dist(free_space, crucial_points)
+    penetration = dist_perpendicular(free_space, crucial_points)
 
-    in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
+    in_obstacle = tf.reduce_sum(d * penetration, -1)
     violation_level = tf.reduce_sum(in_obstacle, -1)
 
     # violation_level = integral(env.free_space, crucial_points)
