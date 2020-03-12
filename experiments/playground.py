@@ -70,10 +70,10 @@ def main():
     # 2. Define model
     data = np.loadtxt("../../TG_data/train/mix3/0.map", delimiter=' ', dtype=np.float32)
     free_space = np.reshape(data, (1, 3, 4, 2))
-    free_space[0, 0, 0, 0] = -11.
-    free_space[0, 0, 3, 0] = -11.
-    free_space[0, 2, 1:3, 0] = -10.
-    free_space[0, 1, :2, 1] = 2.5
+    #free_space[0, 0, 0, 0] = -11.
+    #free_space[0, 0, 3, 0] = -11.
+    #free_space[0, 2, 1:3, 0] = -10.
+    #free_space[0, 1, :2, 1] = 2.5
     p0 = np.array([[-30., 0., 0.]], dtype=np.float32)
     pk = np.array([[-3., 0., 0.]], dtype=np.float32)
     data = (p0, pk, free_space)
@@ -82,10 +82,11 @@ def main():
     # 3. Optimization
     optimizer = tf.train.AdamOptimizer(1e-2)
 
-    # 5. Run everythin    free_space[0, 0, 0, 0] = -11.g
-    for k in range(500):
+    # 5. Run everythin
+    for k in range(100):
         with tf.GradientTape(persistent=True) as tape:
             output, last_ddy = model(data, training=True)
+            print(output)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
                 output, last_ddy, data)
             total_loss = model_loss
@@ -97,6 +98,8 @@ def main():
 
         # plain gradient
         grads = tape.gradient(total_loss, model.trainable_variables)
+        #for g, v in zip(grads, model.trainable_variables):
+            #print(v.name, g)
 
         # Gradient clipping
         #t = 1e-2

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import tensorflow as tf
+import numpy as np
 
 
 def dist2vert(v, q):
@@ -192,7 +193,11 @@ def dist_perpendicular(free_space, p):
 
     Cs = tf.stack([C2, fs_C], -1)
     M = tf.stack([AB2, fs_AB], -2)
-    pp = tf.linalg.solve(M + tf.eye(2, dtype=tf.float32)[tf.newaxis] * 1e-10, -Cs[..., tf.newaxis])
+    det = tf.linalg.det(M)
+    det = tf.tile(det[..., tf.newaxis, tf.newaxis], (1, 1, 1, 1, 1, 2, 2))
+    M = tf.where(det < 1e-4, M + tf.eye(2, dtype=tf.float32)[tf.newaxis] * 1e-4, M)
+    pp = tf.linalg.solve(M, -Cs[..., tf.newaxis])
+    #pp = tf.linalg.solve(M + tf.eye(2, dtype=tf.float32)[tf.newaxis] * 1e-8, -Cs[..., tf.newaxis])
     pp = pp[..., 0]
 
     # CHECK IF BETWEEN ENDS OF SEGMENT

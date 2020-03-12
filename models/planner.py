@@ -261,6 +261,7 @@ def plan_loss(plan, very_last_ddy, data):
     th_path = []
     cvs = []
     future_mul = 1.0
+    #MUL = 0.5
     MUL = 1.0
     # regular path
     for i in range(num_gpts):
@@ -308,7 +309,7 @@ def plan_loss(plan, very_last_ddy, data):
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
-    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss
+    coarse_loss = curvature_loss + 1e-1 * obstacles_loss + overshoot_loss + non_balanced_loss
     fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
 
@@ -375,7 +376,8 @@ def invalidate(x, y, fi, free_space):
     crucial_points = tf.stack(crucial_points, -2)
 
     d = tf.sqrt(tf.reduce_sum((crucial_points[:, 1:] - crucial_points[:, :-1]) ** 2, -1))
-    penetration = dist_perpendicular(free_space, crucial_points)
+    #penetration = dist_perpendicular(free_space, crucial_points)
+    penetration = dist(free_space, crucial_points)[:, :-1]
 
     in_obstacle = tf.reduce_sum(d * penetration, -1)
     violation_level = tf.reduce_sum(in_obstacle, -1)
