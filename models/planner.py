@@ -184,7 +184,7 @@ def calculate_next_point(plan, xL, yL, thL, last_ddy):
 
 def plan_loss(plan, very_last_ddy, data):
     num_gpts = plan.shape[-1]
-    p0, pk, free_space = data
+    p0, pk, free_space, path = data
     x0, y0, th0 = tf.unstack(p0, axis=-1)
     ddy0 = tf.zeros_like(x0)
     xk, yk, thk = tf.unstack(pk, axis=-1)
@@ -201,10 +201,14 @@ def plan_loss(plan, very_last_ddy, data):
     th_path = []
     # regular path
     for i in range(num_gpts):
+        #xL = x0
+        #yL = y0
+        #thL = th0
         x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-            process_segment(plan[:, :, i], xL, yL, thL, last_ddy, free_space)
+            process_segment(plan[:, :, i], xL, yL, thL, last_ddy, free_space, path)
         curvature_loss += curvature_violation
         obstacles_loss += invalid
+        print(i, invalid)
 
         length_loss += length
         lengths.append(length)
@@ -224,7 +228,7 @@ def plan_loss(plan, very_last_ddy, data):
     thk_L = (thk - thL)[:, tf.newaxis]
     overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
     x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-        process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space)
+        process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space, path)
     curvature_loss += curvature_violation
     obstacles_loss += invalid
     length_loss += length
@@ -250,7 +254,8 @@ def plan_loss(plan, very_last_ddy, data):
 
 
 def _plot(x_path, y_path, th_path, data, step, print=False):
-    _, _, free_space = data
+    _, _, free_space, path = data
+    plt.imshow(free_space)
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
@@ -259,10 +264,10 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
         for p in cp:
             plt.plot(p[:, 0], p[:, 1])
 
-    for i in range(free_space.shape[1]):
-        for j in range(4):
-            fs = free_space
-            plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
+    #for i in range(free_space.shape[1]):
+    #    for j in range(4):
+    #        fs = free_space
+    #        plt.plot([fs[0, i, j - 1, 0], fs[0, i, j, 0]], [fs[0, i, j - 1, 1], fs[0, i, j, 1]])
     #plt.xlim(-25.0, 25.0)
     #plt.ylim(0.0, 50.0)
     if print:
@@ -272,7 +277,7 @@ def _plot(x_path, y_path, th_path, data, step, print=False):
         plt.clf()
 
 
-def process_segment(plan, xL, yL, thL, last_ddy, free_space):
+def process_segment(plan, xL, yL, thL, last_ddy, free_space, path):
     x = plan[:, 0]
 
     # calculate params
@@ -287,22 +292,27 @@ def process_segment(plan, xL, yL, thL, last_ddy, free_space):
 
     # calculate violations
     curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - Car.max_curvature) * segments, -1)
-    invalid = invalidate(x_glob, y_glob, th_glob, free_space)
+    invalid = invalidate(x_glob, y_glob, th_glob, free_space, path)
 
     return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
 
 
-def invalidate(x, y, fi, free_space):
+def invalidate(x, y, fi, free_space, path):
     """
         Check how much specified points violate the environment constraints
     """
     crucial_points = calculate_car_crucial_points(x, y, fi)
     crucial_points = tf.stack(crucial_points, -2)
+    xy = tf.stack([x, y], axis=-1)[:, :, tf.newaxis]
 
-    d = tf.sqrt(tf.reduce_sum((crucial_points[:, 1:] - crucial_points[:, :-1]) ** 2, -1))
-    penetration = dist(free_space, crucial_points)
+    d = tf.linalg.norm(xy[:, 1:] - xy[:, :-1], axis=-1)
+    penetration = dist(path, xy)
+    fi = tf.Variable([[[True]]], dtype=tf.bool)
+    fi = tf.concat([tf.logical_not(fi), tf.tile(fi, (1, 127, 1))], 1)
+    penetration = tf.where(fi, penetration, tf.zeros_like(penetration))
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
+    #in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
     violation_level = tf.reduce_sum(in_obstacle, -1)
 
     return violation_level
@@ -319,7 +329,11 @@ def _calculate_global_xyth_and_curvature(params, x, xL, yL, thL):
     y_local_sequence = tf.squeeze(X @ params, -1)
     R = Rot(thL)
     xy_glob = R @ tf.stack([x_local_sequence, y_local_sequence], 1)
-    xy_glob += tf.expand_dims(tf.stack([xL, yL], -1), -1)
+    xyL = tf.stack([xL, yL], -1)[..., tf.newaxis]
+    #xy_glob += tf.expand_dims(tf.stack([xL, yL], -1), -1)
+    #xy_glob += 1e-10
+    #xy_glob += 1e-6
+    xy_glob += tf.constant(xyL, dtype=tf.float32)
 
     x_glob, y_glob = tf.unstack(xy_glob, axis=1)
 
