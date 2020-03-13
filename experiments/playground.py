@@ -29,7 +29,7 @@ tf.set_random_seed(444)
 class Poly(tf.keras.Model):
     def __init__(self):
         super(Poly, self).__init__()
-        t = 5.0
+        t = 4.0
         self.x = tf.Variable(t, trainable=True, name="x1")
         self.y = tf.Variable(0.0, trainable=True, name="y1")
         self.dy = tf.Variable(0.0, trainable=True, name="dy1")
@@ -50,7 +50,37 @@ class Poly(tf.keras.Model):
         self.dy3 = tf.Variable(0.0, trainable=True, name="dy4")
         self.ddy3 = tf.Variable(0.0, trainable=True, name="ddy4")
 
-        self.ddy4 = tf.Variable([[0.0]], trainable=True, name="ddy5")
+        #self.x = tf.Variable(2.5936472, trainable=True, name="x1")
+        #self.y = tf.Variable(0.37031505, trainable=True, name="y1")
+        #self.dy = tf.Variable(0.1720437, trainable=True, name="dy1")
+        #self.ddy = tf.Variable(0.31632972, trainable=True, name="ddy1")
+
+        #self.x1 = tf.Variable(2.9665253, trainable=True, name="x2")
+        #self.y1 = tf.Variable(0.3323588, trainable=True, name="y2")
+        #self.dy1 = tf.Variable(0.05509626, trainable=True, name="dy2")
+        #self.ddy1 = tf.Variable(0.37412417, trainable=True, name="ddy2")
+
+        #self.x2 = tf.Variable(3.2693143, trainable=True, name="x3")
+        #self.y2 = tf.Variable(0.15203762, trainable=True, name="y3")
+        #self.dy2 = tf.Variable(-0.04459729, trainable=True, name="dy3")
+        #self.ddy2 = tf.Variable(0.36783895, trainable=True, name="ddy3")
+
+        #self.x3 = tf.Variable(3.1265612, trainable=True, name="x4")
+        #self.y3 = tf.Variable(-0.02763933, trainable=True, name="y4")
+        #self.dy3 = tf.Variable(-0.04083904, trainable=True, name="dy4")
+        #self.ddy3 = tf.Variable(0.03886854, trainable=True, name="ddy4")
+
+        self.x4 = tf.Variable(t, trainable=True, name="x5")
+        self.y4 = tf.Variable(0.0, trainable=True, name="y5")
+        self.dy4 = tf.Variable(0.0, trainable=True, name="dy5")
+        self.ddy4 = tf.Variable(0.0, trainable=True, name="ddy5")
+
+        self.x5 = tf.Variable(t, trainable=True, name="x6")
+        self.y5 = tf.Variable(0.0, trainable=True, name="y6")
+        self.dy5 = tf.Variable(0.0, trainable=True, name="dy6")
+        self.ddy5 = tf.Variable(0.0, trainable=True, name="ddy6")
+
+        self.ddy6 = tf.Variable([[0.0]], trainable=True, name="ddy7")
 
     def call(self, task, training=None):
         n = 1
@@ -62,8 +92,13 @@ class Poly(tf.keras.Model):
         p2 = tf.tile(p2, [n, 1, 1])
         p3 = tf.stack([self.x3, self.y3, self.dy3, self.ddy3], -1)[tf.newaxis, :, tf.newaxis]
         p3 = tf.tile(p3, [n, 1, 1])
-        p = tf.concat([p, p1, p2, p3], -1)
-        return p, self.ddy4
+        p4 = tf.stack([self.x4, self.y4, self.dy4, self.ddy4], -1)[tf.newaxis, :, tf.newaxis]
+        p4 = tf.tile(p4, [n, 1, 1])
+        p5 = tf.stack([self.x5, self.y5, self.dy5, self.ddy5], -1)[tf.newaxis, :, tf.newaxis]
+        p5 = tf.tile(p5, [n, 1, 1])
+        p = tf.concat([p, p1, p2, p3, p4, p5], -1)
+        #p = tf.concat([p, p1, p2, p3], -1)
+        return p, self.ddy6
 
 
 def main():
@@ -75,26 +110,26 @@ def main():
     #free_space[0, 2, 1:3, 0] = -10.
     #free_space[0, 1, :2, 1] = 2.5
     free_space = plt.imread("map.png")
-    p0 = np.array([[3., 2., 0.]], dtype=np.float32)
-    pk = np.array([[25., 2., 0.]], dtype=np.float32)
+    free_space = np.max(free_space, -1)[np.newaxis]
+    p0 = np.array([[3., 2.5, 0.]], dtype=np.float32)
+    pk = np.array([[25., 2.5, 0.]], dtype=np.float32)
     path = np.array([[3., 2.], [10., 5.], [20., 5.], [25., 2.]], dtype=np.float32)[tf.newaxis]
     data = (p0, pk, free_space, path)
     model = Poly()
 
     # 3. Optimization
-    optimizer = tf.train.AdamOptimizer(1e-2)
+    optimizer = tf.train.AdamOptimizer(3e-2)
 
     # 5. Run everythin
-    for k in range(100):
+    for k in range(200):
         with tf.GradientTape(persistent=True) as tape:
             output, last_ddy = model(data, training=True)
-            print(output)
+            #print(output)
             model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
                 output, last_ddy, data)
             total_loss = model_loss
             print(k, "IL", invalid_loss)
             print(k, "CL", curvature_loss)
-            print(k, "OL", overshoot_loss)
 
         # 5.1.2 Take gradients (if necessary apply regularization like clipping),
 
@@ -111,8 +146,8 @@ def main():
         # BSP
         #t = 1e-1
         g_l = tape.gradient(invalid_loss, model.trainable_variables)
-        for g, v in zip(g_l, model.trainable_variables):
-            print("INV", v.name, g)
+        #for g, v in zip(g_l, model.trainable_variables):
+        #    print("INV", v.name, g)
         c_l = tape.gradient(curvature_loss, model.trainable_variables)
         #for g, v in zip(c_l, model.trainable_variables):
         #    print("CUR", v.name, g)

@@ -18,6 +18,7 @@ def params(q0, q1):
 
     A = tf.stack([X0, dX0, ddX0, X1, dX1, ddX1], -2)
     b = tf.stack([y0, dy0, ddy0, y1, dy1, ddy1], -1)
+    #print(A)
     h = tf.linalg.solve(A, b[..., tf.newaxis])
     return h
 

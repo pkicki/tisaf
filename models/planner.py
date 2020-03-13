@@ -1,6 +1,7 @@
 from math import pi
 
 import tensorflow as tf
+import numpy as np
 
 from dataset.scenarios import decode_data
 from utils.constants import Car
@@ -208,7 +209,6 @@ def plan_loss(plan, very_last_ddy, data):
             process_segment(plan[:, :, i], xL, yL, thL, last_ddy, free_space, path)
         curvature_loss += curvature_violation
         obstacles_loss += invalid
-        print(i, invalid)
 
         length_loss += length
         lengths.append(length)
@@ -243,6 +243,7 @@ def plan_loss(plan, very_last_ddy, data):
     non_balanced_loss += tf.reduce_sum(
         tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
+    #curvature_loss *= 3.
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
     # loss for training
@@ -255,14 +256,15 @@ def plan_loss(plan, very_last_ddy, data):
 
 def _plot(x_path, y_path, th_path, data, step, print=False):
     _, _, free_space, path = data
-    plt.imshow(free_space)
+    plt.imshow(free_space[0])
     for i in range(len(x_path)):
         x = x_path[i][0]
         y = y_path[i][0]
         th = th_path[i][0]
         cp = calculate_car_crucial_points(x, y, th)
         for p in cp:
-            plt.plot(p[:, 0], p[:, 1])
+            plt.plot(p[:, 0] * 10, (10. - p[:, 1]) * 10)
+    plt.plot(path[0, :, 0] * 10, (10 - path[0, :, 1]) * 10, 'r')
 
     #for i in range(free_space.shape[1]):
     #    for j in range(4):
@@ -306,10 +308,26 @@ def invalidate(x, y, fi, free_space, path):
     xy = tf.stack([x, y], axis=-1)[:, :, tf.newaxis]
 
     d = tf.linalg.norm(xy[:, 1:] - xy[:, :-1], axis=-1)
-    penetration = dist(path, xy)
-    fi = tf.Variable([[[True]]], dtype=tf.bool)
-    fi = tf.concat([tf.logical_not(fi), tf.tile(fi, (1, 127, 1))], 1)
-    penetration = tf.where(fi, penetration, tf.zeros_like(penetration))
+    penetration = dist(path, crucial_points)
+    #penetration = dist(path, xy)
+    #xy = 10 * xy
+    #xy = tf.cast(xy, tf.int32)
+    #x, y = tf.unstack(xy, axis=-1)
+    #y = free_space.shape[1] - y - 1
+
+    xy = 10 * crucial_points
+    xy = tf.cast(xy, tf.int32)
+    x, y = tf.unstack(xy, axis=-1)
+    y = free_space.shape[1] - y - 1
+    x = tf.clip_by_value(x, 0, 299)
+    y = tf.clip_by_value(y, 0, 99)
+    fs = free_space[np.arange(free_space.shape[0]), y, x]
+    #fs = tf.reduce_all(fs == 1.0, axis=-1, keepdims=True)
+
+    #fi = tf.Variable([[[True]]], dtype=tf.bool)
+    #fi = tf.concat([tf.logical_not(fi), tf.tile(fi, (1, 127, 1))], 1)
+    penetration = tf.where(fs, tf.zeros_like(penetration), penetration)
+    penetration = tf.reduce_sum(penetration, -1, keepdims=True)
 
     in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
     #in_obstacle = tf.reduce_sum(d * penetration[:, :-1], -1)
