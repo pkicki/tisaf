@@ -34,8 +34,8 @@ def planning_dataset(path):
         pk = np.concatenate([pk[:, 1:], pk[:, :1]], -1)
         paths = np.stack(paths, 0).astype(np.float32)
         paths = np.reshape(paths, (paths.shape[0], -1, 3))
-        paths = paths[:, :, 1:]
-        #paths = tf.concat([paths[:, :, 1:], paths[:, :, :1]], -1)
+        #paths = paths[:, :, 1:]
+        paths = tf.concat([paths[:, :, 1:], paths[:, :, :1]], -1)
         return p0, pk, map, paths
 
     scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]

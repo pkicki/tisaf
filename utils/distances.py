@@ -38,6 +38,24 @@ def point2edge(verts, query_points):
 def point2vert(verts, query_points):
     return verts[:, tf.newaxis, tf.newaxis] - query_points[:, :, :, tf.newaxis]
 
+def path_dist_cp(path, query_points):
+    """
+
+    :param verts: (N, V, 4, 2)
+    :param query_points: (N, S, P, 2)
+    :return:
+    """
+    p2v = point2vert(path[:, :, 0], query_points[:, :, :1])
+    p2v = tf.linalg.norm(p2v, axis=-1)
+    p = tf.linalg.norm(path[:, :, 0], axis=-1)
+    p = tf.tile(p[:, tf.newaxis, tf.newaxis], (1, 128, 1, 1))
+    p2v = tf.where(p != 0, p2v, 1e10 * tf.ones_like(p2v))
+    idx = tf.argmin(p2v, axis=-1)
+    ind = idx[0, :, 0]
+    path_closest = tf.gather(path, ind, axis=1, batch_dims=0)
+    dists = tf.linalg.norm(path_closest - query_points, axis=-1)
+    dists = tf.reduce_sum(dists, -1)
+    return dists
 
 def path_dist(path, query_points):
     """

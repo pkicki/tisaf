@@ -5,7 +5,7 @@ import numpy as np
 
 from utils.constants import Car
 from utils.crucial_points import calculate_car_crucial_points
-from utils.distances import dist, path_dist, if_inside, path_line_dist
+from utils.distances import dist, path_dist, if_inside, path_line_dist, path_dist_cp
 from utils.poly5 import curvature, params
 from utils.utils import _calculate_length, Rot
 from matplotlib import pyplot as plt
@@ -246,6 +246,7 @@ def plan_loss(plan, very_last_ddy, data):
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + 1e1 * curvature_loss
     # loss for training
+    curvature_loss *= 1e1
     coarse_loss = curvature_loss + obstacles_loss + 1e2 * overshoot_loss + non_balanced_loss
     fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
     loss = tf.where(curvature_loss + obstacles_loss + overshoot_loss == 0, fine_loss, coarse_loss)
@@ -310,12 +311,12 @@ def invalidate(x, y, fi, free_space, path):
 
     d = tf.linalg.norm(xy[:, 1:] - xy[:, :-1], axis=-1)
 
-
-    #penetration = path_line_dist(path, crucial_points)
-    penetration = path_dist(path, crucial_points)
+    path_cp = calculate_car_crucial_points(path[..., 0], path[..., 1], path[..., 2])
+    path_cp = tf.stack(path_cp, -2)
+    penetration = path_dist_cp(path_cp, crucial_points)
     not_in_collision = if_inside(free_space, crucial_points)
+    not_in_collision = tf.reduce_any(not_in_collision, axis=-1)
     penetration = tf.where(not_in_collision, tf.zeros_like(penetration), penetration)
-    penetration = tf.reduce_sum(penetration, -1)
     violation_level = tf.reduce_sum(d[..., 0] * penetration[:, :-1], -1)
 
     #penetration = dist(free_space, crucial_points)
