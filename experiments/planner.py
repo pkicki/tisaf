@@ -57,6 +57,7 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+    experiment_handler.restore("./working_dir/prost_pretrained/checkpoints/last_n-500")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -78,6 +79,11 @@ def main(args):
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
+            #grads = tape.gradient(invalid_loss, model.trainable_variables)
+            #for g, v in zip(grads, model.trainable_variables):
+            #    print(v.name)
+            #    print(g)
+            #    #print(tf.reduce_any(tf.math.is_nan(g)).numpy())
 
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
@@ -96,18 +102,20 @@ def main(args):
                 tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=train_step)
-                tfc.summary.scalar('training/eta', eta, step=train_step)
 
             # 5.1.5 Update meta variables
-            eta.assign(eta_f())
             train_step += 1
             if train_step % 20 == 0:
                 _plot(x_path, y_path, th_path, data, train_step)
+            #_plot(x_path, y_path, th_path, data, train_step)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
         with tfc.summary.always_record_summaries():
             tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
+
+        experiment_handler.flush()
+        continue
 
         # 5.2. Validation Loop
         experiment_handler.log_validation()
@@ -145,7 +153,7 @@ def main(args):
         if epoch_accuracy > best_accuracy:
             experiment_handler.save_best()
             best_accuracy = epoch_accuracy
-        experiment_handler.save_last()
+        #experiment_handler.save_last()
 
         experiment_handler.flush()
 
