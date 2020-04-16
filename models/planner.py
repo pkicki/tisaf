@@ -195,6 +195,7 @@ def plan_loss(plan, very_last_ddy, data):
     curvature_loss = 0.0
     obstacles_loss = 0.0
     length_loss = 0.0
+    curvature_accumulation_loss = 0.0
     lengths = []
     x_path = []
     y_path = []
@@ -204,10 +205,11 @@ def plan_loss(plan, very_last_ddy, data):
         #xL = x0
         #yL = y0
         #thL = th0
-        x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
+        x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL, curvature_sum = \
             process_segment(plan[:, :, i], xL, yL, thL, last_ddy, free_space, path)
         curvature_loss += curvature_violation
         obstacles_loss += invalid
+        curvature_accumulation_loss += curvature_sum
 
         length_loss += length
         lengths.append(length)
@@ -218,23 +220,24 @@ def plan_loss(plan, very_last_ddy, data):
         m = tf.cos(dth)**3
         last_ddy = plan[:, 3, i] * m
 
-    # finishing segment
-    xyL = tf.stack([xL, yL], -1)
-    xyk = tf.stack([xk, yk], 1)
-    R = Rot(-thL)
-    xyk_L = tf.squeeze(R @ (xyk - xyL)[:, :, tf.newaxis], -1)
-    xyL_k = tf.squeeze(Rot(-thk) @ (xyL - xyk)[:, :, tf.newaxis], -1)
-    thk_L = (thk - thL)[:, tf.newaxis]
-    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
-    x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-        process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space, path)
-    curvature_loss += curvature_violation
-    obstacles_loss += invalid
-    length_loss += length
-    lengths.append(length)
-    x_path.append(x_glob)
-    y_path.append(y_glob)
-    th_path.append(th_glob)
+    ## finishing segment
+    #xyL = tf.stack([xL, yL], -1)
+    #xyk = tf.stack([xk, yk], 1)
+    #R = Rot(-thL)
+    #xyk_L = tf.squeeze(R @ (xyk - xyL)[:, :, tf.newaxis], -1)
+    #xyL_k = tf.squeeze(Rot(-thk) @ (xyL - xyk)[:, :, tf.newaxis], -1)
+    #thk_L = (thk - thL)[:, tf.newaxis]
+    #overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
+    #x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL, curvature_sum = \
+    #    process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space, path)
+    #curvature_loss += curvature_violation
+    #obstacles_loss += invalid
+    #curvature_accumulation_loss += curvature_sum
+    #length_loss += length
+    #lengths.append(length)
+    #x_path.append(x_glob)
+    #y_path.append(y_glob)
+    #th_path.append(th_glob)
 
     lengths = tf.stack(lengths, -1)
     non_balanced_loss = tf.reduce_sum(
@@ -242,14 +245,20 @@ def plan_loss(plan, very_last_ddy, data):
     non_balanced_loss += tf.reduce_sum(
         tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
+    dx = tf.nn.relu(tf.abs(xk - xL) - 0.4)
+    dy = tf.nn.relu(tf.abs(yk - yL) - 0.4)
+    dth = 10 * tf.nn.relu(tf.abs(thk - thL) - 0.1)
+    overshoot_loss = dx + dy + dth
+
     #curvature_loss *= 3.
     # loss for pretraining
     #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + 1e1 * curvature_loss
     # loss for training
     curvature_loss *= 1e1
-    coarse_loss = curvature_loss + obstacles_loss + 1e2 * overshoot_loss + non_balanced_loss
-    fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
+    coarse_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss
+    fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + 1e-1 * curvature_accumulation_loss#length_loss
     loss = tf.where(curvature_loss + obstacles_loss + overshoot_loss == 0, fine_loss, coarse_loss)
+    #loss = coarse_loss
 
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 
@@ -296,9 +305,10 @@ def process_segment(plan, xL, yL, thL, last_ddy, free_space, path):
 
     # calculate violations
     curvature_violation = tf.reduce_sum(tf.nn.relu(tf.abs(curvature[:, 1:]) - Car.max_curvature) * segments, -1)
+    curvature_sum = tf.reduce_sum(tf.abs(curvature), -1)
     invalid = invalidate(x_glob, y_glob, th_glob, free_space, path)
 
-    return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1]
+    return x_glob, y_glob, th_glob, curvature_violation, invalid, length, x_glob[:, -1], y_glob[:, -1], th_glob[:, -1], curvature_sum
 
 
 def invalidate(x, y, fi, free_space, path):

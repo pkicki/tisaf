@@ -57,7 +57,9 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
-    experiment_handler.restore("./working_dir/prost_pretrained/checkpoints/last_n-500")
+    #experiment_handler.restore("./working_dir/prost_pretrained/checkpoints/last_n-500")
+    #experiment_handler.restore("./working_dir/ten_pretrained/checkpoints/last_n-555")
+    experiment_handler.restore("./working_dir/ten_bez_over_1e-3/checkpoints/best-1022")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -84,14 +86,16 @@ def main(args):
             #    print(v.name)
             #    print(g)
             #    #print(tf.reduce_any(tf.math.is_nan(g)).numpy())
+            #t = 1e0
+            #grads = [tf.clip_by_value(g, -t, t) for g in grads]
 
             optimizer.apply_gradients(zip(grads, model.trainable_variables),
                                       global_step=tf.train.get_or_create_global_step())
 
             # 5.1.3 Calculate statistics
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
-            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
-            acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
+            s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss + overshoot_loss, 0.0), tf.float32))
+            acc.append(tf.cast(tf.equal(invalid_loss + curvature_loss + overshoot_loss, 0.0), tf.float32))
 
             # 5.1.4 Save logs for particular interval
             with tfc.summary.record_summaries_every_n_global_steps(args.log_interval, train_step):
@@ -114,8 +118,8 @@ def main(args):
         with tfc.summary.always_record_summaries():
             tfc.summary.scalar('epoch/good_paths', epoch_accuracy, step=epoch)
 
-        experiment_handler.flush()
-        continue
+        #experiment_handler.flush()
+        #continue
 
         # 5.2. Validation Loop
         experiment_handler.log_validation()
@@ -153,7 +157,7 @@ def main(args):
         if epoch_accuracy > best_accuracy:
             experiment_handler.save_best()
             best_accuracy = epoch_accuracy
-        #experiment_handler.save_last()
+        experiment_handler.save_last()
 
         experiment_handler.flush()
 
