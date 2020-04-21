@@ -59,7 +59,7 @@ def main(args):
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
     #experiment_handler.restore("./working_dir/prost_pretrained/checkpoints/last_n-500")
     #experiment_handler.restore("./working_dir/ten_pretrained/checkpoints/last_n-555")
-    experiment_handler.restore("./working_dir/ten_bez_over_1e-3/checkpoints/best-1022")
+    #experiment_handler.restore("./working_dir/ten_bez_over_1e-3/checkpoints/best-1022")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -75,17 +75,18 @@ def main(args):
         for i, data in _ds('Train', dataset_epoch, train_size, epoch, args.batch_size):
             # 5.1.1. Make inference of the model, calculate losses and record gradients
             with tf.GradientTape(persistent=True) as tape:
-                output, last_ddy = model(data, None, training=True)
-                model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(output, last_ddy, data)
+                output = model(data, None, training=True)
+                model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data)
                 total_loss = model_loss
 
             # 5.1.2 Take gradients (if necessary apply regularization like clipping),
             grads = tape.gradient(total_loss, model.trainable_variables)
             #grads = tape.gradient(invalid_loss, model.trainable_variables)
+            #grads = tape.gradient(curvature_loss, model.trainable_variables)
             #for g, v in zip(grads, model.trainable_variables):
             #    print(v.name)
             #    print(g)
-            #    #print(tf.reduce_any(tf.math.is_nan(g)).numpy())
+            #    print(tf.reduce_any(tf.math.is_nan(g)).numpy())
             #t = 1e0
             #grads = [tf.clip_by_value(g, -t, t) for g in grads]
 
@@ -103,15 +104,17 @@ def main(args):
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=train_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=train_step)
                 tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=train_step)
-                tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=train_step)
 
             # 5.1.5 Update meta variables
             train_step += 1
+            #th = (tf.concat(th_path, axis=-1)[0]).numpy()
+            #plt.plot(th)
+            #plt.show()
             if train_step % 20 == 0:
                 _plot(x_path, y_path, th_path, data, train_step)
-            #_plot(x_path, y_path, th_path, data, train_step)
+            _plot(x_path, y_path, th_path, data, train_step)
         epoch_accuracy = tf.reduce_mean(tf.concat(acc, -1))
 
         # 5.1.6 Take statistics over epoch
@@ -126,9 +129,8 @@ def main(args):
         acc = []
         for i, data in _ds('Validation', val_ds, val_size, epoch, args.batch_size):
             # 5.2.1 Make inference of the model for validation and calculate losses
-            output, last_ddy = model(data, None, training=True)
-            model_loss, invalid_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path = plan_loss(
-                output, last_ddy, data)
+            output = model(data, None, training=True)
+            model_loss, invalid_loss, overshoot_loss, curvature_loss, x_path, y_path, th_path = plan_loss(output, data)
 
             t = tf.reduce_mean(tf.cast(tf.equal(invalid_loss, 0.0), tf.float32))
             s = tf.reduce_mean(tf.cast(tf.equal(invalid_loss + curvature_loss, 0.0), tf.float32))
@@ -140,7 +142,6 @@ def main(args):
                 tfc.summary.scalar('metrics/invalid_loss', invalid_loss, step=val_step)
                 tfc.summary.scalar('metrics/overshoot_loss', overshoot_loss, step=val_step)
                 tfc.summary.scalar('metrics/curvature_loss', curvature_loss, step=val_step)
-                tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=val_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=val_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=val_step)
 

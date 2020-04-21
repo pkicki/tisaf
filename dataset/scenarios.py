@@ -1,8 +1,10 @@
 import os
 from random import shuffle
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from utils.poly5 import params_xy, T, DT, DDT
 
 tf.enable_eager_execution()
 
@@ -36,7 +38,26 @@ def planning_dataset(path):
         paths = np.reshape(paths, (paths.shape[0], -1, 3))
         #paths = paths[:, :, 1:]
         paths = tf.concat([paths[:, :, 1:], paths[:, :, :1]], -1)
-        return p0, pk, map, paths
+        p0 = np.concatenate([p0, np.zeros_like(p0[:, :1])], axis=-1)
+        pk = np.concatenate([pk, np.zeros_like(pk[:, :1])], axis=-1)
+        m = np.ones_like(p0)
+        p_x, p_y = params_xy(p0, pk, m)
+        s = tf.linspace(0., 1., 11)[tf.newaxis]
+        t = tf.stack(T(s), 1)
+        dt = tf.stack(DT(s), 1)
+        ddt = tf.stack(DDT(s), 1)
+        x = p_x @ t
+        y = p_y @ t
+        dx = p_x @ dt
+        dy = p_y @ dt
+        ddx = p_x @ ddt
+        ddy = p_y @ ddt
+        xy = tf.transpose(tf.concat([x, y, dy/dx, ddy/ddx], 1), (0, 2, 1))
+        #print(xy[0, :, 0])
+        #print(xy[0, :, 1])
+        #plt.plot(xy[0, :, 0], xy[0, :, 1])
+        #plt.show()
+        return p0, pk, map, paths, xy
 
     scenarios = [read_scn(f) for f in sorted(os.listdir(path)) if f.endswith(".map")]
 
@@ -44,6 +65,7 @@ def planning_dataset(path):
     p0 = []
     pk = []
     paths = []
+    xys = []
     g = list(range(len(scenarios)))
     shuffle(g)
     for i in g:
@@ -54,8 +76,9 @@ def planning_dataset(path):
             pk.append(scenarios[i][1][k])
             paths.append(scenarios[i][3][k])
             maps.append(scenarios[i][2])
+            xys.append(scenarios[i][4][k])
 
-    ds = tf.data.Dataset.from_tensor_slices((p0, pk, maps, paths)) \
+    ds = tf.data.Dataset.from_tensor_slices((p0, pk, maps, paths, xys)) \
         .shuffle(buffer_size=len(maps), reshuffle_each_iteration=True)
 
     return ds, len(maps)
