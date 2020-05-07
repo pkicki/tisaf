@@ -29,7 +29,7 @@ def planning_dataset(path):
                     v = np.pad(v, (0, w))
                     paths.append(v)
         p0 = np.array(p0, dtype=np.float32)
-        p0 = np.concatenate([p0[:, 1:], p0[:, :1]], -1)
+        p0 = np.concatenate([p0[:, 1:], p0[:, :1], np.zeros_like(p0[:, :1])], -1)
         pk = np.array(pk, dtype=np.float32)
         pk = np.concatenate([pk[:, 1:], pk[:, :1]], -1)
         paths = np.stack(paths, 0).astype(np.float32)
