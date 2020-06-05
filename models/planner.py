@@ -215,23 +215,11 @@ def plan_loss(plan, very_last_ddy, data):
         m = tf.cos(dth)**3
         last_ddy = plan[:, 3, i] * m
 
-    # finishing segment
     xyL = tf.stack([xL, yL], -1)
-    xyk = tf.stack([xk, yk], 1)
-    R = Rot(-thL)
-    xyk_L = tf.squeeze(R @ (xyk - xyL)[:, :, tf.newaxis], -1)
-    xyL_k = tf.squeeze(Rot(-thk) @ (xyL - xyk)[:, :, tf.newaxis], -1)
-    thk_L = (thk - thL)[:, tf.newaxis]
-    overshoot_loss = tf.nn.relu(-xyk_L[:, 0]) + 1e2 * tf.nn.relu(tf.abs(thk_L[:, 0]) - pi / 2) + tf.nn.relu(xyL_k[:, 0])
-    x_glob, y_glob, th_glob, curvature_violation, invalid, length, xL, yL, thL = \
-        process_segment(tf.concat([xyk_L, tf.tan(thk_L), very_last_ddy], -1), xL, yL, thL, last_ddy, free_space)
-    curvature_loss += curvature_violation
-    obstacles_loss += invalid
-    length_loss += length
-    lengths.append(length)
-    x_path.append(x_glob)
-    y_path.append(y_glob)
-    th_path.append(th_glob)
+    x_loss = tf.nn.relu(tf.abs(xL - xk) - 0.3)
+    y_loss = tf.nn.relu(tf.abs(yL - yk) - 0.3)
+    th_loss = tf.nn.relu(tf.abs(thL - thk) - 0.05)
+    overshoot_loss = x_loss + y_loss + th_loss
 
     lengths = tf.stack(lengths, -1)
     non_balanced_loss = tf.reduce_sum(
@@ -240,11 +228,12 @@ def plan_loss(plan, very_last_ddy, data):
         tf.nn.relu(length_loss[:, tf.newaxis] / tf.cast(tf.shape(lengths)[-1], tf.float32) - lengths * 1.5), -1)
 
     # loss for pretraining
-    #loss = non_balanced_loss + 1e2 * overshoot_loss + length_loss + curvature_loss
+    #loss = non_balanced_loss + 1e0 * overshoot_loss + 1e0 * curvature_loss# + length_loss
     # loss for training
     coarse_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss
-    fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
-    loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
+    #fine_loss = curvature_loss + obstacles_loss + overshoot_loss + non_balanced_loss + length_loss
+    #loss = tf.where(curvature_loss + obstacles_loss == 0, fine_loss, coarse_loss)
+    loss = coarse_loss
 
     return loss, obstacles_loss, overshoot_loss, curvature_loss, non_balanced_loss, x_path, y_path, th_path
 

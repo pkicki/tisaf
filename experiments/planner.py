@@ -57,6 +57,8 @@ def main(args):
 
     # 4. Restore, Log & Save
     experiment_handler = ExperimentHandler(args.working_path, args.out_name, args.log_interval, model, optimizer)
+    #experiment_handler.restore("./working_dir/planner_net_pretrained/checkpoints/last_n-1767")
+    #experiment_handler.restore("./working_dir/planner_net_trained_75/checkpoints/last_n-4096")
 
     # 5. Run everything
     train_step, val_step = 0, 0
@@ -96,10 +98,8 @@ def main(args):
                 tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=train_step)
-                tfc.summary.scalar('training/eta', eta, step=train_step)
 
             # 5.1.5 Update meta variables
-            eta.assign(eta_f())
             train_step += 1
             if train_step % 20 == 0:
                 _plot(x_path, y_path, th_path, data, train_step)
