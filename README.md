@@ -1,4 +1,4 @@
-# Neural Path Planning
+# Neural Path Planning (for the newest work on neural path planning please visit: https://github.com/pkicki/neural_path_planning)
 
 This repository contains code associated with the paper "[A Self-Supervised Learning Approach to Rapid Path Planning for Car-Like Vehicles Maneuvering in Urban Environment](https://arxiv.org/abs/2003.00946)".
 
