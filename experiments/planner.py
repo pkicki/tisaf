@@ -96,10 +96,8 @@ def main(args):
                 tfc.summary.scalar('metrics/balance_loss', non_balanced_loss, step=train_step)
                 tfc.summary.scalar('metrics/really_good_paths', s, step=train_step)
                 tfc.summary.scalar('metrics/good_paths', t, step=train_step)
-                tfc.summary.scalar('training/eta', eta, step=train_step)
 
             # 5.1.5 Update meta variables
-            eta.assign(eta_f())
             train_step += 1
             if train_step % 20 == 0:
                 _plot(x_path, y_path, th_path, data, train_step)
